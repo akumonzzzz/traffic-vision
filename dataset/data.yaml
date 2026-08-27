@@ -1,0 +1,20 @@
+# Ultralytics dataset config.
+# Ultralytics finds labels by replacing "/images/" with "/labels/" in each image
+# path, so the two trees must mirror each other exactly:
+#   dataset/images/train/scene01.jpg  ->  dataset/labels/train/scene01.txt
+
+path: ../dataset
+train: images/train
+val: images/val
+
+# Keep these aligned with TRAFFIC_CLASS_NAMES in app/config.py when you
+# fine-tune, so the served class names match what you trained on.
+names:
+  0: car
+  1: truck
+  2: bus
+  3: motorcycle
+  4: bicycle
+  5: person
+  6: traffic light
+  7: stop sign

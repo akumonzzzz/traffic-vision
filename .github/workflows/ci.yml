@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install CPU-only torch, then project deps
+        run: |
+          pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check app scripts
+
+      - name: Test
+        run: pytest
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t traffic-object-detection:ci .
+
+      - name: Boot the container and check it serves
+        run: |
+          docker run -d --name detector -p 7860:7860 traffic-object-detection:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:7860/api/health | grep -q '"status":"ok"'; then
+              echo "Service is healthy"; exit 0
+            fi
+            sleep 3
+          done
+          echo "Service did not become healthy in time"
+          docker logs detector
+          exit 1

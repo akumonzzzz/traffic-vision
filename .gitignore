@@ -1,0 +1,43 @@
+# --- Model weights (too large for GitHub; downloaded at build/run time) ---
+*.pt
+*.pth
+*.onnx
+*.engine
+!.gitkeep
+
+# --- Datasets (keep the repo light; see docs/DATASET.md) ---
+dataset/images/
+dataset/labels/
+runs/
+weights/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Ultralytics ---
+.ultralytics/
+settings.json
+yolo*.pt
+sam*.pt
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# --- Local env ---
+.env
+
+# Superseded prototype, kept locally for reference
+from ultralytics import SAM.py

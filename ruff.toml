@@ -1,0 +1,14 @@
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[lint.flake8-bugbear]
+# File/Form/Query/Depends in argument defaults is the FastAPI idiom, not a bug.
+extend-immutable-calls = [
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Query",
+    "fastapi.Depends",
+]

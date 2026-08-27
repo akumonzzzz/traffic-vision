@@ -1,0 +1,9 @@
+# Inference + serving. Torch itself is installed from the CPU wheel index in
+# the Dockerfile so the image stays ~1 GB instead of ~6 GB with CUDA.
+ultralytics==8.4.120
+fastapi==0.120.1
+uvicorn[standard]==0.38.0
+python-multipart==0.0.20
+pillow==11.3.0
+opencv-python-headless==4.12.0.88
+numpy>=2.1,<3

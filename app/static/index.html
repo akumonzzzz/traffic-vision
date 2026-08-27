@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traffic Object Detection</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#141a2e; --panel-2:#1b2340; --line:#2a3352;
+    --text:#e8ecf7; --muted:#95a0bd; --accent:#4f8cff;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header{padding:28px 20px 8px;text-align:center}
+  h1{margin:0;font-size:clamp(22px,4vw,30px);letter-spacing:-.02em}
+  header p{margin:8px 0 0;color:var(--muted)}
+  .badges{margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .badge{background:var(--panel-2);border:1px solid var(--line);color:var(--muted);
+         padding:3px 10px;border-radius:999px;font-size:12px}
+  main{max-width:1180px;margin:0 auto;padding:20px;display:grid;
+       grid-template-columns:320px 1fr;gap:20px;align-items:start}
+  @media(max-width:880px){main{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);
+        border-radius:var(--radius);padding:18px}
+  .card h2{margin:0 0 14px;font-size:13px;text-transform:uppercase;
+           letter-spacing:.09em;color:var(--muted)}
+  #drop{border:2px dashed var(--line);border-radius:var(--radius);padding:26px 14px;
+        text-align:center;cursor:pointer;transition:.15s;color:var(--muted)}
+  #drop:hover,#drop.over{border-color:var(--accent);background:#4f8cff14;color:var(--text)}
+  #drop strong{display:block;color:var(--text);margin-bottom:4px}
+  .samples{display:flex;gap:8px;margin-top:12px}
+  .samples img{width:100%;height:52px;object-fit:cover;border-radius:8px;
+               border:1px solid var(--line);cursor:pointer;transition:.15s}
+  .samples img:hover{border-color:var(--accent);transform:translateY(-2px)}
+  label.row{display:flex;justify-content:space-between;font-size:13px;
+            color:var(--muted);margin:16px 0 6px}
+  label.row b{color:var(--text);font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .classes{display:flex;flex-wrap:wrap;gap:7px;margin-top:6px}
+  .chip{display:flex;align-items:center;gap:6px;background:var(--panel-2);
+        border:1px solid var(--line);border-radius:999px;padding:4px 10px;
+        font-size:12px;cursor:pointer;user-select:none}
+  .chip input{display:none}
+  .chip .dot{width:9px;height:9px;border-radius:50%;opacity:.3;transition:.15s}
+  .chip.on{border-color:var(--accent);color:var(--text)}
+  .chip.on .dot{opacity:1}
+  button{width:100%;margin-top:18px;padding:12px;border:0;border-radius:10px;
+         background:var(--accent);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  #stage{min-height:300px;display:flex;align-items:center;justify-content:center;
+         background:var(--panel-2);border-radius:10px;overflow:hidden;position:relative}
+  #stage img{max-width:100%;display:block}
+  #stage .hint{color:var(--muted);padding:60px 20px;text-align:center}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
+         gap:10px;margin-top:16px}
+  .stat{background:var(--panel-2);border:1px solid var(--line);
+        border-radius:10px;padding:11px 13px}
+  .stat span{display:block;font-size:11px;text-transform:uppercase;
+             letter-spacing:.07em;color:var(--muted)}
+  .stat b{font-size:21px;font-variant-numeric:tabular-nums}
+  .counts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .count{display:flex;align-items:center;gap:7px;background:var(--panel-2);
+         border:1px solid var(--line);border-radius:8px;padding:6px 11px;font-size:13px}
+  .count b{font-variant-numeric:tabular-nums}
+  details{margin-top:16px}
+  summary{cursor:pointer;color:var(--muted);font-size:13px}
+  pre{background:#0a0f1f;border:1px solid var(--line);border-radius:10px;padding:13px;
+      overflow:auto;max-height:280px;font-size:12px;margin-top:10px}
+  .err{background:#7f1d1d;border:1px solid #b91c1c;border-radius:10px;
+       padding:11px 14px;margin-top:14px;font-size:14px}
+  footer{text-align:center;color:var(--muted);font-size:13px;padding:26px 20px 40px}
+  footer a{color:var(--accent)}
+  .spinner{width:34px;height:34px;border:3px solid var(--line);
+           border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Traffic Object Detection</h1>
+  <p>Upload a road scene &mdash; vehicles, pedestrians and signage are detected in real time.</p>
+  <div class="badges">
+    <span class="badge" id="b-model">model &hellip;</span>
+    <span class="badge" id="b-device">device &hellip;</span>
+    <span class="badge"><a href="/docs" style="color:inherit;text-decoration:none">REST API &rarr;</a></span>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Input</h2>
+    <div id="drop">
+      <strong>Drop an image</strong>
+      or click to browse &middot; JPEG/PNG, max 10&nbsp;MB
+    </div>
+    <input type="file" id="file" accept="image/*" hidden>
+
+    <div class="samples">
+      <img src="/static/samples/traffic1.jpg" alt="Sample road scene 1" data-sample>
+      <img src="/static/samples/traffic2.jpg" alt="Sample road scene 2" data-sample>
+      <img src="/static/samples/traffic3.jpg" alt="Sample road scene 3" data-sample>
+    </div>
+
+    <label class="row">Confidence threshold <b id="conf-v">0.35</b></label>
+    <input type="range" id="conf" min="0.05" max="0.95" step="0.05" value="0.35">
+
+    <label class="row">IoU (overlap merge) <b id="iou-v">0.45</b></label>
+    <input type="range" id="iou" min="0.1" max="0.9" step="0.05" value="0.45">
+
+    <label class="row">Classes</label>
+    <div class="classes" id="classes"></div>
+
+    <button id="run" disabled>Detect</button>
+  </section>
+
+  <section class="card">
+    <h2>Result</h2>
+    <div id="stage"><div class="hint">Choose an image to begin</div></div>
+    <div id="out"></div>
+  </section>
+</main>
+
+<footer>
+  Built with <a href="https://docs.ultralytics.com" target="_blank" rel="noopener">Ultralytics YOLO11</a>
+  &middot; FastAPI &middot; Docker
+</footer>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const stage = $("#stage"), out = $("#out"), runBtn = $("#run");
+let currentFile = null;
+
+/* ---------- sliders ---------- */
+for (const id of ["conf", "iou"]) {
+  const el = $("#" + id), label = $("#" + id + "-v");
+  el.addEventListener("input", () => { label.textContent = Number(el.value).toFixed(2); });
+}
+
+/* ---------- model metadata + class chips ---------- */
+(async () => {
+  try {
+    const health = await (await fetch("/api/health")).json();
+    $("#b-model").textContent = "model: " + health.model;
+    $("#b-device").textContent = "device: " + health.device;
+
+    const data = await (await fetch("/api/classes")).json();
+    $("#classes").innerHTML = data.classes.map((c) =>
+      '<label class="chip on" data-id="' + c.id + '">' +
+        '<input type="checkbox" value="' + c.id + '" checked>' +
+        '<span class="dot" style="background:rgb(' + c.color.join(",") + ')"></span>' +
+        c.name +
+      '</label>').join("");
+
+    $("#classes").addEventListener("change", (e) => {
+      e.target.closest(".chip").classList.toggle("on", e.target.checked);
+    });
+  } catch (err) {
+    $("#b-model").textContent = "model: unavailable";
+  }
+})();
+
+/* ---------- file selection ---------- */
+const drop = $("#drop"), fileInput = $("#file");
+drop.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => {
+  if (fileInput.files[0]) setFile(fileInput.files[0]);
+});
+
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", (e) => {
+  e.preventDefault();
+  drop.classList.remove("over");
+  if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+});
+
+document.querySelectorAll("[data-sample]").forEach((thumb) => {
+  thumb.addEventListener("click", async () => {
+    const blob = await (await fetch(thumb.src)).blob();
+    setFile(new File([blob], thumb.src.split("/").pop(), { type: blob.type }));
+  });
+});
+
+function setFile(file) {
+  currentFile = file;
+  runBtn.disabled = false;
+  out.innerHTML = "";
+  stage.innerHTML = "";
+  const img = new Image();
+  img.src = URL.createObjectURL(file);
+  stage.appendChild(img);
+}
+
+/* ---------- run detection ---------- */
+runBtn.addEventListener("click", async () => {
+  if (!currentFile) return;
+
+  const checked = Array.from(document.querySelectorAll("#classes input:checked"))
+    .map((i) => i.value);
+  if (!checked.length) {
+    out.innerHTML = '<div class="err">Select at least one class.</div>';
+    return;
+  }
+
+  runBtn.disabled = true;
+  runBtn.textContent = "Detecting…";
+  stage.innerHTML = '<div class="spinner"></div>';
+  out.innerHTML = "";
+
+  const form = new FormData();
+  form.append("file", currentFile);
+  form.append("conf", $("#conf").value);
+  form.append("iou", $("#iou").value);
+  form.append("classes", checked.join(","));
+  form.append("annotate", "true");
+
+  try {
+    const res = await fetch("/api/detect", { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || ("Request failed (" + res.status + ")"));
+    render(data);
+  } catch (err) {
+    stage.innerHTML = '<div class="hint">No result</div>';
+    out.innerHTML = '<div class="err">' + err.message + '</div>';
+  } finally {
+    runBtn.disabled = false;
+    runBtn.textContent = "Detect";
+  }
+});
+
+function render(data) {
+  stage.innerHTML = '<img src="' + data.annotated_image + '" alt="Detection result">';
+
+  const counts = Object.entries(data.counts_by_class);
+  const countHtml = counts.length
+    ? counts.map(([n, c]) => '<div class="count">' + n + ' <b>' + c + '</b></div>').join("")
+    : '<div class="count">Nothing detected &mdash; try lowering the confidence threshold</div>';
+
+  const raw = JSON.stringify(
+    Object.assign({}, data, { annotated_image: "<base64 jpeg omitted>" }), null, 2);
+
+  out.innerHTML =
+    '<div class="stats">' +
+      '<div class="stat"><span>Objects</span><b>' + data.count + '</b></div>' +
+      '<div class="stat"><span>Classes</span><b>' + counts.length + '</b></div>' +
+      '<div class="stat"><span>Inference</span><b>' + data.inference_ms + ' ms</b></div>' +
+      '<div class="stat"><span>Resolution</span><b>' +
+        data.image.width + '&times;' + data.image.height + '</b></div>' +
+    '</div>' +
+    '<div class="counts">' + countHtml + '</div>' +
+    '<details><summary>Raw JSON response</summary><pre>' + raw + '</pre></details>';
+}
+</script>
+</body>
+</html>

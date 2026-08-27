@@ -1,0 +1,15 @@
+services:
+  detector:
+    build: .
+    image: traffic-object-detection:latest
+    container_name: traffic-detector
+    ports:
+      - "7860:7860"
+    environment:
+      # Swap in your own fine-tuned weights by mounting them and pointing here.
+      MODEL_PATH: ${MODEL_PATH:-yolo11n.pt}
+      DEFAULT_CONF: ${DEFAULT_CONF:-0.35}
+      DEVICE: cpu
+    volumes:
+      - ./weights:/app/weights:ro
+    restart: unless-stopped
