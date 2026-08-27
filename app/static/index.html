@@ -68,9 +68,14 @@ body{
 /* ============ layout ============ */
 .shell{max-width:1500px;margin:0 auto;padding:20px 22px 56px;
   display:grid;grid-template-columns:296px minmax(0,1fr);gap:18px;align-items:start}
-@media(max-width:1040px){.shell{grid-template-columns:1fr}}
+@media(max-width:1040px){
+  .shell{grid-template-columns:1fr}
+  .shell > main{order:1}
+  .shell > aside{order:2}
+}
 
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px}
+  @media(min-width:1041px){aside.panel{position:sticky;top:78px}}
 .panel-h{
   display:flex;align-items:center;justify-content:space-between;gap:10px;
   padding:12px 15px;border-bottom:1px solid var(--line);
@@ -91,7 +96,11 @@ body{
 .mode:hover{color:var(--text);background:var(--panel-2)}
 .mode[aria-selected="true"]{background:var(--amber-dim);border-color:#f5a5244d;color:var(--amber)}
 .mode svg{width:16px;height:16px;flex:none}
-@media(max-width:520px){.mode span{display:none}}
+@media(max-width:560px){
+  .mode{font-size:12px;gap:6px;padding:10px 4px}
+  .mode svg{width:15px;height:15px}
+}
+@media(max-width:400px){.mode{font-size:11px;gap:4px}}
 
 /* ============ controls ============ */
 .field{margin-bottom:17px}
@@ -150,9 +159,13 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px #f5a52433}
 
 /* ============ stage ============ */
 .stage-wrap{position:relative;background:#05070b;border-radius:10px;overflow:hidden;
-  min-height:340px;display:flex;align-items:center;justify-content:center}
-.stage-wrap.tall{min-height:420px}
+  display:flex;align-items:center;justify-content:center}
+/* Height is only reserved while the placeholder shows. Once a result lands the
+   stage shrinks to it, so a wide clip is not framed by huge black bars. */
+.stage-wrap.empty{min-height:340px}
+.stage-wrap.tall.empty{min-height:420px}
 #imgStage img,#videoStage video,#liveStage video{max-width:100%;max-height:72vh;display:block}
+#videoStage video{width:100%;height:auto}
 #liveStage{position:relative;line-height:0}
 #liveOverlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .placeholder{padding:64px 26px;text-align:center;color:var(--dim);max-width:420px}
@@ -169,10 +182,12 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px #f5a52433}
 .drop small{font-size:11px;color:var(--dim)}
 .drop.over b{color:var(--amber)}
 
-.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:11px}
+/* Capped width: stretched across the full panel these become 46px slivers of
+   road that are impossible to tell apart. */
+.thumbs{display:grid;grid-template-columns:repeat(3,minmax(0,196px));gap:8px;margin-top:11px}
 .thumbs button{padding:0;border:1px solid var(--line);border-radius:7px;overflow:hidden;
   cursor:pointer;background:none;transition:.16s;line-height:0}
-.thumbs img{width:100%;height:46px;object-fit:cover;display:block}
+.thumbs img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block}
 .thumbs button:hover{border-color:var(--amber);transform:translateY(-2px)}
 
 /* ============ telemetry ============ */
@@ -285,7 +300,7 @@ footer a:hover{color:var(--amber);border-color:var(--amber)}
       <div class="field">
         <div class="chiprow">
           <label style="font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600">Classes</label>
-          <button class="linkbtn" id="toggleAll" type="button">None</button>
+          <button class="linkbtn" id="toggleAll" type="button">Clear all</button>
         </div>
         <div class="chips" id="chips"></div>
       </div>
@@ -306,7 +321,7 @@ footer a:hover{color:var(--amber);border-color:var(--amber)}
       </button>
       <button class="mode" role="tab" aria-selected="false" data-mode="live" id="tab-live">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10.5V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-3.5l7 4.5V6z"/></svg>
-        <span>Live camera</span>
+        <span>Live</span>
       </button>
     </div>
 
@@ -328,7 +343,7 @@ footer a:hover{color:var(--amber);border-color:var(--amber)}
           <button type="button" data-src="/static/samples/traffic3.jpg"><img src="/static/samples/traffic3.jpg" alt="Sample: overhead road view"></button>
         </div>
 
-        <div class="stage-wrap" id="imgStage" style="margin-top:15px">
+        <div class="stage-wrap empty" id="imgStage" style="margin-top:15px">
           <div class="placeholder">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
             <b>No image loaded</b>
@@ -367,7 +382,7 @@ footer a:hover{color:var(--amber);border-color:var(--amber)}
           <p class="hintline">Process every Nth frame. Higher is faster but coarser tracking.</p>
         </div>
 
-        <div class="stage-wrap tall" id="videoStage" style="margin-top:15px">
+        <div class="stage-wrap tall empty" id="videoStage" style="margin-top:15px">
           <div class="placeholder">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
             <b>No clip loaded</b>
@@ -390,7 +405,7 @@ footer a:hover{color:var(--amber);border-color:var(--amber)}
         <span class="pill" id="livePill"><span class="dot" style="color:var(--dim)"></span>offline</span>
       </div>
       <div class="panel-b">
-        <div class="stage-wrap tall" id="liveWrap">
+        <div class="stage-wrap tall empty" id="liveWrap">
           <div class="placeholder" id="livePlaceholder">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 10.5V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-3.5l7 4.5V6z"/></svg>
             <b>Camera off</b>
@@ -490,7 +505,7 @@ function syncRange(el){
     $("chips").addEventListener("change", (e) => {
       e.target.closest(".chip").classList.toggle("on", e.target.checked);
       const all = [...document.querySelectorAll("#chips input")];
-      $("toggleAll").textContent = all.every(i => i.checked) ? "None" : "All";
+      $("toggleAll").textContent = all.every(i => i.checked) ? "Clear all" : "Select all";
       pushLiveConfig();
     });
 
@@ -498,7 +513,7 @@ function syncRange(el){
       const all = [...document.querySelectorAll("#chips input")];
       const target = !all.every(i => i.checked);
       all.forEach(i => { i.checked = target; i.closest(".chip").classList.toggle("on", target); });
-      $("toggleAll").textContent = target ? "None" : "All";
+      $("toggleAll").textContent = target ? "Clear all" : "Select all";
       pushLiveConfig();
     });
   } catch (err) {
@@ -509,19 +524,21 @@ function syncRange(el){
 /* =======================================================================
    mode tabs
    ======================================================================= */
+function setMode(mode){
+  document.querySelectorAll(".mode").forEach(b =>
+    b.setAttribute("aria-selected", String(b.dataset.mode === mode)));
+  for (const m of ["image", "video", "live"]) {
+    $("panel-" + m).classList.toggle("hidden", m !== mode);
+  }
+  // The counting line is meaningless for a single frame.
+  $("lineField").classList.toggle("hidden", mode === "image");
+  if (mode !== "live") stopLive();
+}
+
 document.querySelectorAll(".mode").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const mode = btn.dataset.mode;
-    document.querySelectorAll(".mode").forEach(b =>
-      b.setAttribute("aria-selected", String(b === btn)));
-    for (const m of ["image", "video", "live"]) {
-      $("panel-" + m).classList.toggle("hidden", m !== mode);
-    }
-    // The counting line is meaningless for a single frame.
-    $("lineField").classList.toggle("hidden", mode === "image");
-    if (mode !== "live") stopLive();
-  });
+  btn.addEventListener("click", () => setMode(btn.dataset.mode));
 });
+
 
 /* =======================================================================
    generic drop zone
@@ -556,6 +573,7 @@ function loadImage(file, token){
   $("imgRun").disabled = false;
   $("imgOut").innerHTML = "";
   $("imgLatency").style.display = "none";
+  $("imgStage").classList.remove("empty");
   $("imgStage").innerHTML = '<img alt="Selected road scene">';
   $("imgStage").querySelector("img").src = URL.createObjectURL(file);
 }
@@ -578,6 +596,7 @@ $("imgRun").addEventListener("click", async () => {
   const btn = $("imgRun");
   const token = ++selectionToken;   // any in-flight sample load is now stale
   btn.disabled = true;
+  $("imgStage").classList.add("empty");
   $("imgStage").innerHTML = '<div class="loading"><div class="spinner"></div><p>running inference</p></div>';
   $("imgOut").innerHTML = "";
 
@@ -593,6 +612,7 @@ $("imgRun").addEventListener("click", async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || ("Request failed (" + res.status + ")"));
 
+    $("imgStage").classList.remove("empty");
     $("imgStage").innerHTML = '<img alt="Detection result">';
     $("imgStage").querySelector("img").src = data.annotated_image;
     $("imgLatency").style.display = "";
@@ -608,6 +628,7 @@ $("imgRun").addEventListener("click", async () => {
       '</div>' + tally(data.counts_by_class) +
       '<details><summary>Raw response</summary><pre>' + esc(raw) + '</pre></details>';
   } catch (err) {
+    $("imgStage").classList.add("empty");
     $("imgStage").innerHTML = '<div class="placeholder"><b>Detection failed</b></div>';
     showError($("imgOut"), err.message);
   } finally {
@@ -624,6 +645,7 @@ function loadVideo(file){
   videoFile = file;
   $("vidRun").disabled = false;
   $("vidOut").innerHTML = "";
+  $("videoStage").classList.remove("empty");
   $("videoStage").innerHTML = '<video controls muted playsinline></video>';
   $("videoStage").querySelector("video").src = URL.createObjectURL(file);
   $("vidDrop").querySelector("b").textContent = file.name;
@@ -710,6 +732,7 @@ function pollJob(jobId){
 function renderVideoResult(jobId, job){
   const s = job.stats || {};
   const counts = s.counts || {};
+  $("videoStage").classList.remove("empty");
   $("videoStage").innerHTML =
     '<video controls autoplay muted playsinline src="' + job.result_url + '"></video>';
 
@@ -782,6 +805,7 @@ async function startLive(){
   await video.play().catch(() => {});
 
   $("livePlaceholder").classList.add("hidden");
+  $("liveWrap").classList.remove("empty");
   $("liveStage").classList.remove("hidden");
   $("liveStart").classList.add("hidden");
   $("liveStop").classList.remove("hidden");
@@ -956,6 +980,7 @@ function stopLive(){
   if (video) video.srcObject = null;
 
   $("liveStage").classList.add("hidden");
+  $("liveWrap").classList.add("empty");
   $("livePlaceholder").classList.remove("hidden");
   $("liveStart").classList.remove("hidden");
   $("liveStop").classList.add("hidden");
@@ -966,6 +991,10 @@ function stopLive(){
 }
 
 window.addEventListener("beforeunload", stopLive);
+
+// Apply the default mode last: setMode -> stopLive touches `liveRunning`, which
+// is a `let` further up and therefore not initialised until this point.
+setMode("image");
 </script>
 </body>
 </html>

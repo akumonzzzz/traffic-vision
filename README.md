@@ -18,6 +18,11 @@ assigns each vehicle a persistent ID, and counts it as it crosses a virtual line
 **[▶ Live demo](https://huggingface.co/spaces/YOUR_HF_USERNAME/traffic-vision)** ·
 **[API docs](https://huggingface.co/spaces/YOUR_HF_USERNAME/traffic-vision/docs)**
 
+![The console: clip analysis with tracking and line counting](docs/console.jpg)
+
+Every vehicle carries a persistent ID and a motion trail, and is counted once as
+it crosses the line:
+
 ![Tracking with persistent IDs and a counting line](docs/tracking.jpg)
 
 ---
