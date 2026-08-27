@@ -75,6 +75,18 @@ class TrafficDetector:
             return sorted(self.names)
         return sorted(matched)
 
+    def new_tracking_model(self) -> YOLO:
+        """A private YOLO instance for one tracking session.
+
+        Ultralytics stores tracker state on the model (``predictor.trackers``),
+        and ``persist=True`` deliberately keeps it between calls. That makes the
+        model object single-tenant: two sessions sharing one would inherit each
+        other's frame counter and open tracks, so ids and counts from one user
+        would leak into another's. Weights are small (yolo11n is ~6 MB) and load
+        in tens of milliseconds, so a session gets its own instance.
+        """
+        return YOLO(self.model_path)
+
     def class_catalog(self) -> list[dict]:
         """Classes this deployment can report, for the UI's filter checkboxes."""
         return [

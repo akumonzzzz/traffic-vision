@@ -1,6 +1,7 @@
 """Runtime configuration, all overridable via environment variables."""
 
 import os
+import tempfile
 from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parent
@@ -18,6 +19,23 @@ DEVICE = os.getenv("DEVICE", "cpu")
 
 # Reject oversized uploads before they reach the model.
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
+MAX_VIDEO_BYTES = int(os.getenv("MAX_VIDEO_BYTES", str(60 * 1024 * 1024)))
+
+# Video processing. A free-tier CPU box does roughly 8-15 fps at 640 px, so a
+# long clip must be capped or the request outlives the user's patience.
+VIDEO_MAX_WIDTH = int(os.getenv("VIDEO_MAX_WIDTH", "960"))
+VIDEO_MAX_FRAMES = int(os.getenv("VIDEO_MAX_FRAMES", "900"))
+VIDEO_JOB_TTL_S = int(os.getenv("VIDEO_JOB_TTL_S", "1800"))
+JOB_DIR = Path(os.getenv("JOB_DIR", tempfile.gettempdir())) / "traffic-detector-jobs"
+
+# Live stream. Frames arrive over a websocket; this caps how much work a single
+# viewer can queue up.
+LIVE_MAX_WIDTH = int(os.getenv("LIVE_MAX_WIDTH", "960"))
+LIVE_MAX_FRAME_BYTES = int(os.getenv("LIVE_MAX_FRAME_BYTES", str(3 * 1024 * 1024)))
+
+# Each live session holds its own model instance for tracker isolation, so
+# concurrent viewers must be bounded or memory grows without limit.
+MAX_LIVE_SESSIONS = int(os.getenv("MAX_LIVE_SESSIONS", "4"))
 
 # COCO class ids that are meaningful on a road scene. When the model is a
 # custom fine-tune whose names do not match these, TRAFFIC_CLASSES is ignored

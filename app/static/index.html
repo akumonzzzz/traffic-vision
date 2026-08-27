@@ -3,255 +3,969 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Traffic Object Detection</title>
+<title>Traffic Vision — Real-time Detection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --bg:#0b1020; --panel:#141a2e; --panel-2:#1b2340; --line:#2a3352;
-    --text:#e8ecf7; --muted:#95a0bd; --accent:#4f8cff;
-    --radius:14px;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--text);
-       font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-  header{padding:28px 20px 8px;text-align:center}
-  h1{margin:0;font-size:clamp(22px,4vw,30px);letter-spacing:-.02em}
-  header p{margin:8px 0 0;color:var(--muted)}
-  .badges{margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
-  .badge{background:var(--panel-2);border:1px solid var(--line);color:var(--muted);
-         padding:3px 10px;border-radius:999px;font-size:12px}
-  main{max-width:1180px;margin:0 auto;padding:20px;display:grid;
-       grid-template-columns:320px 1fr;gap:20px;align-items:start}
-  @media(max-width:880px){main{grid-template-columns:1fr}}
-  .card{background:var(--panel);border:1px solid var(--line);
-        border-radius:var(--radius);padding:18px}
-  .card h2{margin:0 0 14px;font-size:13px;text-transform:uppercase;
-           letter-spacing:.09em;color:var(--muted)}
-  #drop{border:2px dashed var(--line);border-radius:var(--radius);padding:26px 14px;
-        text-align:center;cursor:pointer;transition:.15s;color:var(--muted)}
-  #drop:hover,#drop.over{border-color:var(--accent);background:#4f8cff14;color:var(--text)}
-  #drop strong{display:block;color:var(--text);margin-bottom:4px}
-  .samples{display:flex;gap:8px;margin-top:12px}
-  .samples img{width:100%;height:52px;object-fit:cover;border-radius:8px;
-               border:1px solid var(--line);cursor:pointer;transition:.15s}
-  .samples img:hover{border-color:var(--accent);transform:translateY(-2px)}
-  label.row{display:flex;justify-content:space-between;font-size:13px;
-            color:var(--muted);margin:16px 0 6px}
-  label.row b{color:var(--text);font-variant-numeric:tabular-nums}
-  input[type=range]{width:100%;accent-color:var(--accent)}
-  .classes{display:flex;flex-wrap:wrap;gap:7px;margin-top:6px}
-  .chip{display:flex;align-items:center;gap:6px;background:var(--panel-2);
-        border:1px solid var(--line);border-radius:999px;padding:4px 10px;
-        font-size:12px;cursor:pointer;user-select:none}
-  .chip input{display:none}
-  .chip .dot{width:9px;height:9px;border-radius:50%;opacity:.3;transition:.15s}
-  .chip.on{border-color:var(--accent);color:var(--text)}
-  .chip.on .dot{opacity:1}
-  button{width:100%;margin-top:18px;padding:12px;border:0;border-radius:10px;
-         background:var(--accent);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
-  button:disabled{opacity:.5;cursor:not-allowed}
-  #stage{min-height:300px;display:flex;align-items:center;justify-content:center;
-         background:var(--panel-2);border-radius:10px;overflow:hidden;position:relative}
-  #stage img{max-width:100%;display:block}
-  #stage .hint{color:var(--muted);padding:60px 20px;text-align:center}
-  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
-         gap:10px;margin-top:16px}
-  .stat{background:var(--panel-2);border:1px solid var(--line);
-        border-radius:10px;padding:11px 13px}
-  .stat span{display:block;font-size:11px;text-transform:uppercase;
-             letter-spacing:.07em;color:var(--muted)}
-  .stat b{font-size:21px;font-variant-numeric:tabular-nums}
-  .counts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
-  .count{display:flex;align-items:center;gap:7px;background:var(--panel-2);
-         border:1px solid var(--line);border-radius:8px;padding:6px 11px;font-size:13px}
-  .count b{font-variant-numeric:tabular-nums}
-  details{margin-top:16px}
-  summary{cursor:pointer;color:var(--muted);font-size:13px}
-  pre{background:#0a0f1f;border:1px solid var(--line);border-radius:10px;padding:13px;
-      overflow:auto;max-height:280px;font-size:12px;margin-top:10px}
-  .err{background:#7f1d1d;border:1px solid #b91c1c;border-radius:10px;
-       padding:11px 14px;margin-top:14px;font-size:14px}
-  footer{text-align:center;color:var(--muted);font-size:13px;padding:26px 20px 40px}
-  footer a{color:var(--accent)}
-  .spinner{width:34px;height:34px;border:3px solid var(--line);
-           border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
+:root{
+  --bg:#07090e;
+  --bg-2:#0b0f16;
+  --panel:#0f141d;
+  --panel-2:#141a25;
+  --line:#1e2632;
+  --line-2:#2a3444;
+  --text:#e7ecf4;
+  --muted:#7b8698;
+  --dim:#4d5766;
+  --amber:#f5a524;
+  --amber-dim:#f5a52422;
+  --green:#21d07a;
+  --red:#ff5d5d;
+  --blue:#4d9fff;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg);color:var(--text);font-family:var(--sans);
+  font-size:14px;line-height:1.5;
+  background-image:
+    radial-gradient(900px 500px at 12% -8%, #f5a5240d, transparent 60%),
+    radial-gradient(700px 400px at 100% 0%, #4d9fff0a, transparent 55%);
+  min-height:100vh;
+}
+
+/* ============ header ============ */
+.topbar{
+  display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+  padding:14px 22px;border-bottom:1px solid var(--line);
+  background:#080b11d9;backdrop-filter:blur(12px);
+  position:sticky;top:0;z-index:50;
+}
+.brand{display:flex;align-items:center;gap:11px;margin-right:auto}
+.signal{display:flex;flex-direction:column;gap:3px}
+.signal i{width:7px;height:7px;border-radius:50%;background:#2a3444;display:block}
+.signal i:nth-child(1){background:var(--red);box-shadow:0 0 8px #ff5d5d80}
+.signal i:nth-child(2){background:var(--amber);box-shadow:0 0 8px #f5a52480}
+.signal i:nth-child(3){background:var(--green);box-shadow:0 0 8px #21d07a80}
+.brand h1{font-size:15px;font-weight:700;letter-spacing:.16em;text-transform:uppercase}
+.brand span{display:block;font-size:10.5px;color:var(--dim);letter-spacing:.13em;
+  text-transform:uppercase;font-weight:500;margin-top:1px}
+.pills{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.pill{
+  display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;
+  background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  padding:5px 10px;color:var(--muted);white-space:nowrap;
+}
+.pill b{color:var(--text);font-weight:500}
+.pill.live{border-color:#21d07a4d;background:#21d07a12;color:var(--green)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.dot.pulse{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* ============ layout ============ */
+.shell{max-width:1500px;margin:0 auto;padding:20px 22px 56px;
+  display:grid;grid-template-columns:296px minmax(0,1fr);gap:18px;align-items:start}
+@media(max-width:1040px){.shell{grid-template-columns:1fr}}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.panel-h{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:12px 15px;border-bottom:1px solid var(--line);
+}
+.panel-h h2{font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--muted);font-weight:600}
+.panel-b{padding:15px}
+
+/* ============ mode tabs ============ */
+.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;
+  background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:5px;margin-bottom:16px}
+.mode{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:11px 8px;border-radius:7px;border:1px solid transparent;background:none;
+  color:var(--muted);font-family:var(--sans);font-size:13px;font-weight:600;
+  cursor:pointer;transition:.16s;
+}
+.mode:hover{color:var(--text);background:var(--panel-2)}
+.mode[aria-selected="true"]{background:var(--amber-dim);border-color:#f5a5244d;color:var(--amber)}
+.mode svg{width:16px;height:16px;flex:none}
+@media(max-width:520px){.mode span{display:none}}
+
+/* ============ controls ============ */
+.field{margin-bottom:17px}
+.field:last-child{margin-bottom:0}
+.field-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.field-h label{font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--muted);font-weight:600}
+.field-h output{font-family:var(--mono);font-size:12.5px;color:var(--amber);font-weight:500}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:2px;
+  background:linear-gradient(90deg,var(--amber) var(--fill,40%),var(--line-2) var(--fill,40%));
+  cursor:pointer;outline:none;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+  background:var(--amber);border:2.5px solid var(--bg);cursor:pointer;
+  box-shadow:0 0 0 1px var(--amber),0 2px 6px #0009;
+}
+input[type=range]::-moz-range-thumb{
+  width:15px;height:15px;border-radius:50%;background:var(--amber);
+  border:2.5px solid var(--bg);cursor:pointer;box-shadow:0 0 0 1px var(--amber);
+}
+input[type=range]:focus-visible{box-shadow:0 0 0 3px #f5a52433}
+.hintline{font-size:11px;color:var(--dim);margin-top:6px;line-height:1.45}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;
+  background:var(--bg-2);border:1px solid var(--line);border-radius:999px;
+  padding:5px 10px;font-size:11.5px;color:var(--dim);transition:.14s;
+}
+.chip input{position:absolute;opacity:0;width:0;height:0}
+.chip i{width:8px;height:8px;border-radius:2px;background:currentColor;opacity:.35;transition:.14s}
+.chip:hover{border-color:var(--line-2);color:var(--muted)}
+.chip.on{color:var(--text);border-color:var(--line-2);background:var(--panel-2)}
+.chip.on i{opacity:1}
+.chip:focus-within{box-shadow:0 0 0 2px #f5a52440}
+.chiprow{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.linkbtn{background:none;border:0;color:var(--dim);font-size:10.5px;cursor:pointer;
+  font-family:var(--sans);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+.linkbtn:hover{color:var(--amber)}
+
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  padding:12px 14px;border:0;border-radius:9px;cursor:pointer;
+  font-family:var(--sans);font-size:14px;font-weight:600;
+  background:var(--amber);color:#1a1204;transition:.15s;
+}
+.btn:hover:not(:disabled){filter:brightness(1.09)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.ghost{background:var(--panel-2);color:var(--text);border:1px solid var(--line-2)}
+.btn.ghost:hover:not(:disabled){border-color:var(--muted)}
+.btn.danger{background:#ff5d5d1f;color:var(--red);border:1px solid #ff5d5d4d}
+.btn svg{width:16px;height:16px}
+.btnrow{display:flex;gap:8px;margin-top:16px}
+
+/* ============ stage ============ */
+.stage-wrap{position:relative;background:#05070b;border-radius:10px;overflow:hidden;
+  min-height:340px;display:flex;align-items:center;justify-content:center}
+.stage-wrap.tall{min-height:420px}
+#imgStage img,#videoStage video,#liveStage video{max-width:100%;max-height:72vh;display:block}
+#liveStage{position:relative;line-height:0}
+#liveOverlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.placeholder{padding:64px 26px;text-align:center;color:var(--dim);max-width:420px}
+.placeholder svg{width:38px;height:38px;margin-bottom:14px;opacity:.4}
+.placeholder b{display:block;color:var(--muted);font-size:14px;margin-bottom:6px;font-weight:600}
+.placeholder p{font-size:12.5px;line-height:1.6}
+
+.drop{
+  border:1.5px dashed var(--line-2);border-radius:10px;padding:22px 16px;text-align:center;
+  cursor:pointer;transition:.16s;color:var(--muted);background:var(--bg-2);
+}
+.drop:hover,.drop.over{border-color:var(--amber);background:var(--amber-dim);color:var(--text)}
+.drop b{display:block;color:var(--text);font-size:13px;margin-bottom:3px;font-weight:600}
+.drop small{font-size:11px;color:var(--dim)}
+.drop.over b{color:var(--amber)}
+
+.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:11px}
+.thumbs button{padding:0;border:1px solid var(--line);border-radius:7px;overflow:hidden;
+  cursor:pointer;background:none;transition:.16s;line-height:0}
+.thumbs img{width:100%;height:46px;object-fit:cover;display:block}
+.thumbs button:hover{border-color:var(--amber);transform:translateY(-2px)}
+
+/* ============ telemetry ============ */
+.telemetry{display:grid;grid-template-columns:repeat(auto-fit,minmax(122px,1fr));
+  gap:9px;margin-top:14px}
+.metric{background:var(--bg-2);border:1px solid var(--line);border-radius:9px;padding:11px 13px}
+.metric label{display:block;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--dim);font-weight:600;margin-bottom:5px}
+.metric .v{font-family:var(--mono);font-size:22px;font-weight:500;line-height:1.1;
+  font-variant-numeric:tabular-nums}
+.metric .v small{font-size:11px;color:var(--muted);font-weight:400;margin-left:2px}
+.metric.accent .v{color:var(--amber)}
+.metric.good .v{color:var(--green)}
+
+.flowrow{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:9px}
+.flow{background:var(--bg-2);border:1px solid var(--line);border-radius:9px;
+  padding:11px 13px;display:flex;align-items:center;gap:11px}
+.flow .arrow{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;flex:none}
+.flow.in .arrow{background:#21d07a1f;color:var(--green)}
+.flow.out .arrow{background:#4d9fff1f;color:var(--blue)}
+.flow svg{width:15px;height:15px}
+.flow label{display:block;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--dim);font-weight:600}
+.flow .v{font-family:var(--mono);font-size:19px;font-weight:500;font-variant-numeric:tabular-nums}
+
+.tally{display:flex;flex-wrap:wrap;gap:7px;margin-top:13px}
+.tally-item{display:flex;align-items:center;gap:7px;background:var(--bg-2);
+  border:1px solid var(--line);border-radius:7px;padding:6px 11px;font-size:12.5px}
+.tally-item i{width:8px;height:8px;border-radius:2px;flex:none}
+.tally-item b{font-family:var(--mono);font-weight:500;font-variant-numeric:tabular-nums}
+
+/* progress */
+.progress{margin-top:14px}
+.progress-h{display:flex;justify-content:space-between;font-size:11.5px;
+  color:var(--muted);margin-bottom:7px;font-family:var(--mono)}
+.track{height:5px;background:var(--line);border-radius:3px;overflow:hidden}
+.track i{display:block;height:100%;width:0;border-radius:3px;
+  background:linear-gradient(90deg,var(--amber),#ffd166);transition:width .3s ease}
+
+.msg{border-radius:9px;padding:11px 14px;margin-top:13px;font-size:13px;line-height:1.5}
+.msg.err{background:#ff5d5d14;border:1px solid #ff5d5d40;color:#ffb0b0}
+.msg.info{background:#4d9fff14;border:1px solid #4d9fff40;color:#a9d0ff}
+
+.spinner{width:30px;height:30px;border:2.5px solid var(--line-2);
+  border-top-color:var(--amber);border-radius:50%;animation:spin .75s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading{display:flex;flex-direction:column;align-items:center;gap:13px;padding:60px 20px}
+.loading p{font-size:12.5px;color:var(--dim);font-family:var(--mono)}
+
+details{margin-top:13px}
+summary{cursor:pointer;color:var(--dim);font-size:11.5px;letter-spacing:.06em;
+  text-transform:uppercase;font-weight:600;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary:before{content:"▸ ";color:var(--amber)}
+details[open] summary:before{content:"▾ "}
+summary:hover{color:var(--muted)}
+pre{background:#05070b;border:1px solid var(--line);border-radius:9px;padding:13px;
+  overflow:auto;max-height:300px;font-family:var(--mono);font-size:11.5px;
+  margin-top:9px;color:#b8c2d2;line-height:1.55}
+
+.hidden{display:none !important}
+footer{text-align:center;color:var(--dim);font-size:12px;padding:0 22px 40px}
+footer a{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--line-2)}
+footer a:hover{color:var(--amber);border-color:var(--amber)}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 </style>
 </head>
 <body>
-<header>
-  <h1>Traffic Object Detection</h1>
-  <p>Upload a road scene &mdash; vehicles, pedestrians and signage are detected in real time.</p>
-  <div class="badges">
-    <span class="badge" id="b-model">model &hellip;</span>
-    <span class="badge" id="b-device">device &hellip;</span>
-    <span class="badge"><a href="/docs" style="color:inherit;text-decoration:none">REST API &rarr;</a></span>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="signal" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div>
+      <h1>Traffic Vision</h1>
+      <span>Real-time object detection</span>
+    </div>
+  </div>
+  <div class="pills">
+    <span class="pill" id="pillModel"><span class="dot" style="color:var(--dim)"></span>connecting</span>
+    <span class="pill" id="pillDevice">—</span>
+    <span class="pill hidden" id="pillFps">— <b>fps</b></span>
+    <a class="pill" href="/docs" target="_blank" rel="noopener" style="text-decoration:none">API ↗</a>
   </div>
 </header>
 
-<main>
-  <section class="card">
-    <h2>Input</h2>
-    <div id="drop">
-      <strong>Drop an image</strong>
-      or click to browse &middot; JPEG/PNG, max 10&nbsp;MB
+<div class="shell">
+
+  <!-- ==================== controls ==================== -->
+  <aside class="panel">
+    <div class="panel-h"><h2>Detection parameters</h2></div>
+    <div class="panel-b">
+
+      <div class="field">
+        <div class="field-h"><label for="conf">Confidence</label><output id="confOut">0.35</output></div>
+        <input type="range" id="conf" min="0.05" max="0.95" step="0.05" value="0.35">
+        <p class="hintline">Lower catches distant vehicles but adds false positives.</p>
+      </div>
+
+      <div class="field">
+        <div class="field-h"><label for="iou">Overlap (IoU)</label><output id="iouOut">0.45</output></div>
+        <input type="range" id="iou" min="0.10" max="0.90" step="0.05" value="0.45">
+      </div>
+
+      <div class="field" id="lineField">
+        <div class="field-h"><label for="lineY">Counting line</label><output id="lineOut">0.50</output></div>
+        <input type="range" id="lineY" min="0.05" max="0.95" step="0.05" value="0.50">
+        <p class="hintline">Virtual tripwire. Vehicles are counted once, in the direction they cross.</p>
+      </div>
+
+      <div class="field">
+        <div class="chiprow">
+          <label style="font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600">Classes</label>
+          <button class="linkbtn" id="toggleAll" type="button">None</button>
+        </div>
+        <div class="chips" id="chips"></div>
+      </div>
+
     </div>
-    <input type="file" id="file" accept="image/*" hidden>
+  </aside>
 
-    <div class="samples">
-      <img src="/static/samples/traffic1.jpg" alt="Sample road scene 1" data-sample>
-      <img src="/static/samples/traffic2.jpg" alt="Sample road scene 2" data-sample>
-      <img src="/static/samples/traffic3.jpg" alt="Sample road scene 3" data-sample>
+  <!-- ==================== main ==================== -->
+  <main>
+    <div class="modes" role="tablist" aria-label="Input source">
+      <button class="mode" role="tab" aria-selected="true" data-mode="image" id="tab-image">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+        <span>Image</span>
+      </button>
+      <button class="mode" role="tab" aria-selected="false" data-mode="video" id="tab-video">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+        <span>Video</span>
+      </button>
+      <button class="mode" role="tab" aria-selected="false" data-mode="live" id="tab-live">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10.5V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-3.5l7 4.5V6z"/></svg>
+        <span>Live camera</span>
+      </button>
     </div>
 
-    <label class="row">Confidence threshold <b id="conf-v">0.35</b></label>
-    <input type="range" id="conf" min="0.05" max="0.95" step="0.05" value="0.35">
+    <!-- ---------- IMAGE ---------- -->
+    <section class="panel" id="panel-image">
+      <div class="panel-h">
+        <h2>Single frame analysis</h2>
+        <span class="pill" id="imgLatency" style="display:none">—</span>
+      </div>
+      <div class="panel-b">
+        <div class="drop" id="imgDrop" tabindex="0" role="button">
+          <b>Drop a road scene</b>
+          <small>or click to browse · JPEG/PNG · max 10 MB</small>
+        </div>
+        <input type="file" id="imgFile" accept="image/*" hidden>
+        <div class="thumbs" id="thumbs">
+          <button type="button" data-src="/static/samples/traffic1.jpg"><img src="/static/samples/traffic1.jpg" alt="Sample: multi-lane highway"></button>
+          <button type="button" data-src="/static/samples/traffic2.jpg"><img src="/static/samples/traffic2.jpg" alt="Sample: divided highway"></button>
+          <button type="button" data-src="/static/samples/traffic3.jpg"><img src="/static/samples/traffic3.jpg" alt="Sample: overhead road view"></button>
+        </div>
 
-    <label class="row">IoU (overlap merge) <b id="iou-v">0.45</b></label>
-    <input type="range" id="iou" min="0.1" max="0.9" step="0.05" value="0.45">
+        <div class="stage-wrap" id="imgStage" style="margin-top:15px">
+          <div class="placeholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+            <b>No image loaded</b>
+            <p>Pick a sample above or drop your own road scene to run detection.</p>
+          </div>
+        </div>
 
-    <label class="row">Classes</label>
-    <div class="classes" id="classes"></div>
+        <button class="btn" id="imgRun" disabled style="margin-top:15px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg>
+          Run detection
+        </button>
+        <div id="imgOut"></div>
+      </div>
+    </section>
 
-    <button id="run" disabled>Detect</button>
-  </section>
+    <!-- ---------- VIDEO ---------- -->
+    <section class="panel hidden" id="panel-video">
+      <div class="panel-h">
+        <h2>Clip analysis with tracking</h2>
+        <span class="pill">ByteTrack</span>
+      </div>
+      <div class="panel-b">
+        <div class="drop" id="vidDrop" tabindex="0" role="button">
+          <b>Drop a traffic clip</b>
+          <small>MP4 / MOV / AVI / MKV · max 60 MB · first 900 frames</small>
+        </div>
+        <input type="file" id="vidFile" accept="video/*" hidden>
+        <button class="btn ghost" id="vidSample" style="margin-top:11px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+          Use the sample clip
+        </button>
 
-  <section class="card">
-    <h2>Result</h2>
-    <div id="stage"><div class="hint">Choose an image to begin</div></div>
-    <div id="out"></div>
-  </section>
-</main>
+        <div class="field" style="margin-top:15px">
+          <div class="field-h"><label for="stride">Frame stride</label><output id="strideOut">1</output></div>
+          <input type="range" id="stride" min="1" max="6" step="1" value="1">
+          <p class="hintline">Process every Nth frame. Higher is faster but coarser tracking.</p>
+        </div>
+
+        <div class="stage-wrap tall" id="videoStage" style="margin-top:15px">
+          <div class="placeholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+            <b>No clip loaded</b>
+            <p>Every vehicle gets a persistent ID, a motion trail, and is counted once as it crosses the line.</p>
+          </div>
+        </div>
+
+        <button class="btn" id="vidRun" disabled style="margin-top:15px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg>
+          Process clip
+        </button>
+        <div id="vidOut"></div>
+      </div>
+    </section>
+
+    <!-- ---------- LIVE ---------- -->
+    <section class="panel hidden" id="panel-live">
+      <div class="panel-h">
+        <h2>Live camera feed</h2>
+        <span class="pill" id="livePill"><span class="dot" style="color:var(--dim)"></span>offline</span>
+      </div>
+      <div class="panel-b">
+        <div class="stage-wrap tall" id="liveWrap">
+          <div class="placeholder" id="livePlaceholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 10.5V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-3.5l7 4.5V6z"/></svg>
+            <b>Camera off</b>
+            <p>Detection runs on the live feed frame by frame. Frames are sent to this server for inference and are never stored.</p>
+          </div>
+          <div id="liveStage" class="hidden">
+            <video id="liveVideo" playsinline muted autoplay></video>
+            <canvas id="liveOverlay"></canvas>
+          </div>
+        </div>
+
+        <div class="btnrow">
+          <button class="btn" id="liveStart">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10.5V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-3.5l7 4.5V6z"/></svg>
+            Start camera
+          </button>
+          <button class="btn danger hidden" id="liveStop" style="flex:0 0 auto;width:auto;padding:12px 20px">Stop</button>
+          <button class="btn ghost hidden" id="liveReset" style="flex:0 0 auto;width:auto;padding:12px 20px">Reset counts</button>
+        </div>
+        <div id="liveOut"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
 
 <footer>
-  Built with <a href="https://docs.ultralytics.com" target="_blank" rel="noopener">Ultralytics YOLO11</a>
-  &middot; FastAPI &middot; Docker
+  <a href="https://docs.ultralytics.com" target="_blank" rel="noopener">YOLO11</a> ·
+  ByteTrack · FastAPI · Docker —
+  <a href="/docs" target="_blank" rel="noopener">REST &amp; WebSocket API</a>
 </footer>
 
 <script>
-const $ = (s) => document.querySelector(s);
-const stage = $("#stage"), out = $("#out"), runBtn = $("#run");
-let currentFile = null;
+"use strict";
+const $ = (id) => document.getElementById(id);
+const COLORS = {};                    // class name -> "r,g,b", filled from /api/classes
+let CLASSES = [];
 
-/* ---------- sliders ---------- */
-for (const id of ["conf", "iou"]) {
-  const el = $("#" + id), label = $("#" + id + "-v");
-  el.addEventListener("input", () => { label.textContent = Number(el.value).toFixed(2); });
+/* =======================================================================
+   shared helpers
+   ======================================================================= */
+function selectedClassIds(){
+  return [...document.querySelectorAll("#chips input:checked")].map(i => i.value);
+}
+function esc(s){
+  return String(s).replace(/[&<>"']/g, c =>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function metric(label, value, unit, cls){
+  return '<div class="metric ' + (cls||"") + '"><label>' + label + '</label>' +
+         '<div class="v">' + value + (unit ? '<small>' + unit + '</small>' : '') + '</div></div>';
+}
+function tally(counts){
+  const entries = Object.entries(counts || {});
+  if (!entries.length) return '<div class="tally"><div class="tally-item">Nothing detected — try lowering confidence</div></div>';
+  return '<div class="tally">' + entries.map(([name, n]) =>
+    '<div class="tally-item"><i style="background:rgb(' + (COLORS[name] || "148,163,184") + ')"></i>' +
+    esc(name) + ' <b>' + n + '</b></div>').join("") + '</div>';
+}
+function showError(host, text){
+  host.innerHTML = '<div class="msg err">' + esc(text) + '</div>';
+}
+function syncRange(el){
+  const pct = (el.value - el.min) / (el.max - el.min) * 100;
+  el.style.setProperty("--fill", pct + "%");
 }
 
-/* ---------- model metadata + class chips ---------- */
+/* =======================================================================
+   sliders
+   ======================================================================= */
+[["conf","confOut",2],["iou","iouOut",2],["lineY","lineOut",2],["stride","strideOut",0]]
+.forEach(([id, outId, digits]) => {
+  const el = $(id), out = $(outId);
+  const render = () => { out.textContent = Number(el.value).toFixed(digits); syncRange(el); };
+  el.addEventListener("input", () => { render(); if (id !== "stride") pushLiveConfig(); });
+  render();
+});
+
+/* =======================================================================
+   boot: model info + class chips
+   ======================================================================= */
 (async () => {
   try {
     const health = await (await fetch("/api/health")).json();
-    $("#b-model").textContent = "model: " + health.model;
-    $("#b-device").textContent = "device: " + health.device;
+    $("pillModel").innerHTML =
+      '<span class="dot" style="color:var(--green)"></span><b>' + esc(health.model) + '</b>';
+    $("pillDevice").innerHTML = 'device <b>' + esc(health.device) + '</b>';
 
     const data = await (await fetch("/api/classes")).json();
-    $("#classes").innerHTML = data.classes.map((c) =>
-      '<label class="chip on" data-id="' + c.id + '">' +
-        '<input type="checkbox" value="' + c.id + '" checked>' +
-        '<span class="dot" style="background:rgb(' + c.color.join(",") + ')"></span>' +
-        c.name +
-      '</label>').join("");
+    CLASSES = data.classes;
+    for (const c of CLASSES) COLORS[c.name] = c.color.join(",");
 
-    $("#classes").addEventListener("change", (e) => {
+    $("chips").innerHTML = CLASSES.map(c =>
+      '<label class="chip on"><input type="checkbox" value="' + c.id + '" checked>' +
+      '<i style="color:rgb(' + c.color.join(",") + ')"></i>' + esc(c.name) + '</label>').join("");
+
+    $("chips").addEventListener("change", (e) => {
       e.target.closest(".chip").classList.toggle("on", e.target.checked);
+      const all = [...document.querySelectorAll("#chips input")];
+      $("toggleAll").textContent = all.every(i => i.checked) ? "None" : "All";
+      pushLiveConfig();
+    });
+
+    $("toggleAll").addEventListener("click", () => {
+      const all = [...document.querySelectorAll("#chips input")];
+      const target = !all.every(i => i.checked);
+      all.forEach(i => { i.checked = target; i.closest(".chip").classList.toggle("on", target); });
+      $("toggleAll").textContent = target ? "None" : "All";
+      pushLiveConfig();
     });
   } catch (err) {
-    $("#b-model").textContent = "model: unavailable";
+    $("pillModel").innerHTML = '<span class="dot" style="color:var(--red)"></span>offline';
   }
 })();
 
-/* ---------- file selection ---------- */
-const drop = $("#drop"), fileInput = $("#file");
-drop.addEventListener("click", () => fileInput.click());
-fileInput.addEventListener("change", () => {
-  if (fileInput.files[0]) setFile(fileInput.files[0]);
-});
-
-drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
-drop.addEventListener("dragleave", () => drop.classList.remove("over"));
-drop.addEventListener("drop", (e) => {
-  e.preventDefault();
-  drop.classList.remove("over");
-  if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
-});
-
-document.querySelectorAll("[data-sample]").forEach((thumb) => {
-  thumb.addEventListener("click", async () => {
-    const blob = await (await fetch(thumb.src)).blob();
-    setFile(new File([blob], thumb.src.split("/").pop(), { type: blob.type }));
+/* =======================================================================
+   mode tabs
+   ======================================================================= */
+document.querySelectorAll(".mode").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const mode = btn.dataset.mode;
+    document.querySelectorAll(".mode").forEach(b =>
+      b.setAttribute("aria-selected", String(b === btn)));
+    for (const m of ["image", "video", "live"]) {
+      $("panel-" + m).classList.toggle("hidden", m !== mode);
+    }
+    // The counting line is meaningless for a single frame.
+    $("lineField").classList.toggle("hidden", mode === "image");
+    if (mode !== "live") stopLive();
   });
 });
 
-function setFile(file) {
-  currentFile = file;
-  runBtn.disabled = false;
-  out.innerHTML = "";
-  stage.innerHTML = "";
-  const img = new Image();
-  img.src = URL.createObjectURL(file);
-  stage.appendChild(img);
+/* =======================================================================
+   generic drop zone
+   ======================================================================= */
+function wireDrop(dropId, inputId, onFile){
+  const drop = $(dropId), input = $(inputId);
+  drop.addEventListener("click", () => input.click());
+  drop.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); }
+  });
+  input.addEventListener("change", () => input.files[0] && onFile(input.files[0]));
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", (e) => {
+    e.preventDefault(); drop.classList.remove("over");
+    if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]);
+  });
 }
 
-/* ---------- run detection ---------- */
-runBtn.addEventListener("click", async () => {
-  if (!currentFile) return;
+/* =======================================================================
+   MODE 1 — image
+   ======================================================================= */
+let imageFile = null;
+// Monotonic token for image selection. Loading a sample is async (fetch), and a
+// slow one could otherwise resolve *after* a detection finished and wipe the
+// result off the screen. Only the newest selection is allowed to render.
+let selectionToken = 0;
 
-  const checked = Array.from(document.querySelectorAll("#classes input:checked"))
-    .map((i) => i.value);
-  if (!checked.length) {
-    out.innerHTML = '<div class="err">Select at least one class.</div>';
-    return;
-  }
+function loadImage(file, token){
+  if (token !== undefined && token !== selectionToken) return;   // superseded
+  imageFile = file;
+  $("imgRun").disabled = false;
+  $("imgOut").innerHTML = "";
+  $("imgLatency").style.display = "none";
+  $("imgStage").innerHTML = '<img alt="Selected road scene">';
+  $("imgStage").querySelector("img").src = URL.createObjectURL(file);
+}
 
-  runBtn.disabled = true;
-  runBtn.textContent = "Detecting…";
-  stage.innerHTML = '<div class="spinner"></div>';
-  out.innerHTML = "";
+wireDrop("imgDrop", "imgFile", (file) => { selectionToken++; loadImage(file); });
+
+document.querySelectorAll("#thumbs button").forEach(b => {
+  b.addEventListener("click", async () => {
+    const token = ++selectionToken;
+    const blob = await (await fetch(b.dataset.src)).blob();
+    loadImage(new File([blob], b.dataset.src.split("/").pop(), { type: blob.type }), token);
+  });
+});
+
+$("imgRun").addEventListener("click", async () => {
+  if (!imageFile) return;
+  const classes = selectedClassIds();
+  if (!classes.length) return showError($("imgOut"), "Select at least one class.");
+
+  const btn = $("imgRun");
+  const token = ++selectionToken;   // any in-flight sample load is now stale
+  btn.disabled = true;
+  $("imgStage").innerHTML = '<div class="loading"><div class="spinner"></div><p>running inference</p></div>';
+  $("imgOut").innerHTML = "";
 
   const form = new FormData();
-  form.append("file", currentFile);
-  form.append("conf", $("#conf").value);
-  form.append("iou", $("#iou").value);
-  form.append("classes", checked.join(","));
+  form.append("file", imageFile);
+  form.append("conf", $("conf").value);
+  form.append("iou", $("iou").value);
+  form.append("classes", classes.join(","));
   form.append("annotate", "true");
 
   try {
     const res = await fetch("/api/detect", { method: "POST", body: form });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || ("Request failed (" + res.status + ")"));
-    render(data);
+
+    $("imgStage").innerHTML = '<img alt="Detection result">';
+    $("imgStage").querySelector("img").src = data.annotated_image;
+    $("imgLatency").style.display = "";
+    $("imgLatency").innerHTML = '<b>' + data.inference_ms + '</b> ms';
+
+    const raw = JSON.stringify({ ...data, annotated_image: "<base64 jpeg omitted>" }, null, 2);
+    $("imgOut").innerHTML =
+      '<div class="telemetry">' +
+        metric("Objects", data.count, "", "accent") +
+        metric("Classes", Object.keys(data.counts_by_class).length) +
+        metric("Inference", data.inference_ms, "ms") +
+        metric("Resolution", data.image.width + "×" + data.image.height) +
+      '</div>' + tally(data.counts_by_class) +
+      '<details><summary>Raw response</summary><pre>' + esc(raw) + '</pre></details>';
   } catch (err) {
-    stage.innerHTML = '<div class="hint">No result</div>';
-    out.innerHTML = '<div class="err">' + err.message + '</div>';
+    $("imgStage").innerHTML = '<div class="placeholder"><b>Detection failed</b></div>';
+    showError($("imgOut"), err.message);
   } finally {
-    runBtn.disabled = false;
-    runBtn.textContent = "Detect";
+    btn.disabled = false;
   }
 });
 
-function render(data) {
-  stage.innerHTML = '<img src="' + data.annotated_image + '" alt="Detection result">';
+/* =======================================================================
+   MODE 2 — video
+   ======================================================================= */
+let videoFile = null, pollTimer = null;
 
-  const counts = Object.entries(data.counts_by_class);
-  const countHtml = counts.length
-    ? counts.map(([n, c]) => '<div class="count">' + n + ' <b>' + c + '</b></div>').join("")
-    : '<div class="count">Nothing detected &mdash; try lowering the confidence threshold</div>';
-
-  const raw = JSON.stringify(
-    Object.assign({}, data, { annotated_image: "<base64 jpeg omitted>" }), null, 2);
-
-  out.innerHTML =
-    '<div class="stats">' +
-      '<div class="stat"><span>Objects</span><b>' + data.count + '</b></div>' +
-      '<div class="stat"><span>Classes</span><b>' + counts.length + '</b></div>' +
-      '<div class="stat"><span>Inference</span><b>' + data.inference_ms + ' ms</b></div>' +
-      '<div class="stat"><span>Resolution</span><b>' +
-        data.image.width + '&times;' + data.image.height + '</b></div>' +
-    '</div>' +
-    '<div class="counts">' + countHtml + '</div>' +
-    '<details><summary>Raw JSON response</summary><pre>' + raw + '</pre></details>';
+function loadVideo(file){
+  videoFile = file;
+  $("vidRun").disabled = false;
+  $("vidOut").innerHTML = "";
+  $("videoStage").innerHTML = '<video controls muted playsinline></video>';
+  $("videoStage").querySelector("video").src = URL.createObjectURL(file);
+  $("vidDrop").querySelector("b").textContent = file.name;
 }
+
+wireDrop("vidDrop", "vidFile", loadVideo);
+
+$("vidSample").addEventListener("click", async () => {
+  const btn = $("vidSample");
+  btn.disabled = true;
+  try {
+    const url = "/static/samples/traffic-clip.mp4";
+    const blob = await (await fetch(url)).blob();
+    loadVideo(new File([blob], "traffic-clip.mp4", { type: "video/mp4" }));
+  } catch (err) {
+    showError($("vidOut"), "Could not load the sample clip.");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("vidRun").addEventListener("click", async () => {
+  if (!videoFile) return;
+  const classes = selectedClassIds();
+  if (!classes.length) return showError($("vidOut"), "Select at least one class.");
+
+  const btn = $("vidRun");
+  btn.disabled = true;
+  $("vidOut").innerHTML =
+    '<div class="progress"><div class="progress-h"><span id="pgLabel">uploading…</span>' +
+    '<span id="pgPct">0%</span></div><div class="track"><i id="pgBar"></i></div></div>';
+
+  const form = new FormData();
+  form.append("file", videoFile);
+  form.append("conf", $("conf").value);
+  form.append("iou", $("iou").value);
+  form.append("classes", classes.join(","));
+  form.append("stride", $("stride").value);
+  form.append("line_y", $("lineY").value);
+
+  try {
+    const res = await fetch("/api/video", { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || ("Upload failed (" + res.status + ")"));
+    if (data.notice) {
+      $("vidOut").insertAdjacentHTML("beforeend",
+        '<div class="msg info">' + esc(data.notice) + '</div>');
+    }
+    pollJob(data.job_id);
+  } catch (err) {
+    showError($("vidOut"), err.message);
+    btn.disabled = false;
+  }
+});
+
+function pollJob(jobId){
+  clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch("/api/video/" + jobId);
+      const job = await res.json();
+      if (!res.ok) throw new Error(job.detail || "Lost track of the job");
+
+      const pct = Math.round(job.progress * 100);
+      const bar = $("pgBar"), lab = $("pgLabel"), pctEl = $("pgPct");
+      if (bar) bar.style.width = pct + "%";
+      if (pctEl) pctEl.textContent = pct + "%";
+      if (lab) {
+        lab.textContent = job.state === "running"
+          ? "tracking · frame " + job.frames_done + (job.frames_total ? " / " + job.frames_total : "")
+          : job.state;
+      }
+
+      if (job.state === "done")   { clearInterval(pollTimer); renderVideoResult(jobId, job); }
+      if (job.state === "failed") { clearInterval(pollTimer); showError($("vidOut"), job.error || "Processing failed"); $("vidRun").disabled = false; }
+    } catch (err) {
+      clearInterval(pollTimer);
+      showError($("vidOut"), err.message);
+      $("vidRun").disabled = false;
+    }
+  }, 700);
+}
+
+function renderVideoResult(jobId, job){
+  const s = job.stats || {};
+  const counts = s.counts || {};
+  $("videoStage").innerHTML =
+    '<video controls autoplay muted playsinline src="' + job.result_url + '"></video>';
+
+  $("vidOut").innerHTML =
+    '<div class="telemetry">' +
+      metric("Unique vehicles", Object.values(s.unique_objects || {}).reduce((a, b) => a + b, 0), "", "accent") +
+      metric("Frames", s.frames || 0) +
+      metric("Peak in frame", s.peak_concurrent || 0) +
+      metric("Processed in", job.elapsed_s, "s", "good") +
+    '</div>' +
+    '<div class="flowrow">' +
+      '<div class="flow in"><div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>' +
+        '<div><label>Crossed inbound</label><div class="v">' + (counts.total_in || 0) + '</div></div></div>' +
+      '<div class="flow out"><div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>' +
+        '<div><label>Crossed outbound</label><div class="v">' + (counts.total_out || 0) + '</div></div></div>' +
+    '</div>' +
+    tally(s.unique_objects) +
+    '<div class="btnrow"><a class="btn ghost" href="' + job.result_url + '" download>Download annotated clip</a></div>' +
+    '<details><summary>Raw response</summary><pre>' + esc(JSON.stringify(job, null, 2)) + '</pre></details>';
+
+  $("vidRun").disabled = false;
+}
+
+/* =======================================================================
+   MODE 3 — live camera
+   ======================================================================= */
+let ws = null, mediaStream = null, liveRunning = false;
+let sendCanvas = null, sendCtx = null, awaitingReply = false;
+let fpsWindow = [], lastTracks = [], lastLine = null;
+
+function pushLiveConfig(){
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({
+    conf: parseFloat($("conf").value),
+    iou: parseFloat($("iou").value),
+    line_y: parseFloat($("lineY").value),
+    classes: selectedClassIds().map(Number),
+  }));
+}
+
+$("liveStart").addEventListener("click", startLive);
+$("liveStop").addEventListener("click", stopLive);
+$("liveReset").addEventListener("click", () => {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ reset: true }));
+  fpsWindow = [];
+});
+
+async function startLive(){
+  $("liveOut").innerHTML = "";
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return showError($("liveOut"),
+      "This browser will not expose a camera here. A secure context (HTTPS or localhost) is required.");
+  }
+
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "environment" },
+      audio: false,
+    });
+  } catch (err) {
+    const reason = err && err.name === "NotAllowedError"
+      ? "Camera permission was denied. Allow it in your browser's site settings and try again."
+      : "No camera available (" + (err && err.name ? err.name : "unknown") + ").";
+    return showError($("liveOut"), reason);
+  }
+
+  const video = $("liveVideo");
+  video.srcObject = mediaStream;
+  await video.play().catch(() => {});
+
+  $("livePlaceholder").classList.add("hidden");
+  $("liveStage").classList.remove("hidden");
+  $("liveStart").classList.add("hidden");
+  $("liveStop").classList.remove("hidden");
+  $("liveReset").classList.remove("hidden");
+  $("pillFps").classList.remove("hidden");
+
+  sendCanvas = document.createElement("canvas");
+  sendCtx = sendCanvas.getContext("2d", { willReadFrequently: true });
+
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(proto + "//" + location.host + "/ws/live");
+  ws.binaryType = "arraybuffer";
+
+  ws.onopen = () => {
+    liveRunning = true;
+    awaitingReply = false;
+    fpsWindow = [];
+    setLivePill("live", "streaming");
+    pushLiveConfig();
+    requestAnimationFrame(pumpFrame);
+  };
+
+  ws.onmessage = (evt) => {
+    const msg = JSON.parse(evt.data);
+    awaitingReply = false;
+    if (msg.ack || msg.error) {
+      if (msg.error) showError($("liveOut"), msg.error);
+      return;
+    }
+    lastTracks = msg.tracks;
+    lastLine = msg.line;
+
+    fpsWindow.push(performance.now());
+    if (fpsWindow.length > 20) fpsWindow.shift();
+    renderLiveStats(msg);
+    drawOverlay();
+  };
+
+  ws.onerror = () => showError($("liveOut"), "Connection to the inference server failed.");
+  ws.onclose = () => { if (liveRunning) stopLive(); };
+}
+
+/** Grab one frame and send it. Returns false if it was not ready to send. */
+function captureAndSend(){
+  const video = $("liveVideo");
+  // One frame in flight at a time. This is the backpressure rule: without it a
+  // 60 Hz camera would queue frames faster than a CPU box can clear them and
+  // the overlay would drift seconds behind reality.
+  if (awaitingReply || !ws || ws.readyState !== WebSocket.OPEN || !video.videoWidth) {
+    return false;
+  }
+  const scale = Math.min(1, 960 / video.videoWidth);
+  sendCanvas.width = Math.round(video.videoWidth * scale);
+  sendCanvas.height = Math.round(video.videoHeight * scale);
+  sendCtx.drawImage(video, 0, 0, sendCanvas.width, sendCanvas.height);
+  awaitingReply = true;                       // claim the slot before the async encode
+  sendCanvas.toBlob((blob) => {
+    if (blob && ws && ws.readyState === WebSocket.OPEN) {
+      blob.arrayBuffer().then(buf => ws.send(buf));
+    } else {
+      awaitingReply = false;                  // never stall on a failed encode
+    }
+  }, "image/jpeg", 0.6);
+  return true;
+}
+
+// The capture loop is driven by requestAnimationFrame, which browsers pause on
+// a hidden tab. That is the behaviour we want -- an unwatched tab should not
+// consume a server inference slot -- but it must be visible in the UI rather
+// than looking like a stall. rAF resumes the chain on its own when the tab
+// returns, so nothing needs restarting.
+function pumpFrame(){
+  if (!liveRunning) return;
+  captureAndSend();
+  requestAnimationFrame(pumpFrame);
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (!liveRunning) return;
+  if (document.hidden) {
+    setLivePill("off", "paused · tab hidden");
+  } else {
+    setLivePill("live", "streaming");
+    awaitingReply = false;   // a reply may have been dropped while suspended
+    requestAnimationFrame(pumpFrame);
+  }
+});
+
+function drawOverlay(){
+  const video = $("liveVideo"), cv = $("liveOverlay");
+  if (!video.videoWidth) return;
+
+  const rect = video.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  if (cv.width !== Math.round(rect.width * dpr) || cv.height !== Math.round(rect.height * dpr)) {
+    cv.width = Math.round(rect.width * dpr);
+    cv.height = Math.round(rect.height * dpr);
+  }
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, rect.width, rect.height);
+
+  // counting line
+  if (lastLine && lastLine.line) {
+    const y = lastLine.line.start[1] * rect.height;
+    ctx.strokeStyle = "rgba(255,255,255,.85)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([9, 7]);
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(rect.width, y); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.font = "600 12px " + getComputedStyle(document.body).fontFamily;
+  ctx.textBaseline = "top";
+
+  for (const t of lastTracks) {
+    const x = t.x * rect.width, y = t.y * rect.height;
+    const w = t.w * rect.width, h = t.h * rect.height;
+    const rgb = COLORS[t.name] || "148,163,184";
+
+    ctx.strokeStyle = "rgb(" + rgb + ")";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+
+    const label = "#" + t.id + " " + t.name;
+    const tw = ctx.measureText(label).width;
+    const ly = y - 18 >= 0 ? y - 18 : y + 2;
+    ctx.fillStyle = "rgb(" + rgb + ")";
+    ctx.fillRect(x, ly, tw + 12, 17);
+    ctx.fillStyle = "#0b0f16";
+    ctx.fillText(label, x + 6, ly + 3);
+  }
+}
+window.addEventListener("resize", () => { if (liveRunning) drawOverlay(); });
+
+function renderLiveStats(msg){
+  let fps = 0;
+  if (fpsWindow.length > 1) {
+    const span = (fpsWindow[fpsWindow.length - 1] - fpsWindow[0]) / 1000;
+    if (span > 0) fps = (fpsWindow.length - 1) / span;
+  }
+  $("pillFps").innerHTML = '<b>' + fps.toFixed(1) + '</b> fps';
+
+  const line = msg.line || {};
+  $("liveOut").innerHTML =
+    '<div class="telemetry">' +
+      metric("In frame now", msg.tracks.length, "", "accent") +
+      metric("Unique seen", msg.unique_total, "", "good") +
+      metric("Inference", msg.inference_ms, "ms") +
+      metric("Throughput", fps.toFixed(1), "fps") +
+    '</div>' +
+    '<div class="flowrow">' +
+      '<div class="flow in"><div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>' +
+        '<div><label>Crossed inbound</label><div class="v">' + (line.total_in || 0) + '</div></div></div>' +
+      '<div class="flow out"><div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>' +
+        '<div><label>Crossed outbound</label><div class="v">' + (line.total_out || 0) + '</div></div></div>' +
+    '</div>' + tally(msg.counts);
+}
+
+function setLivePill(kind, text){
+  const pill = $("livePill");
+  pill.className = "pill" + (kind === "live" ? " live" : "");
+  pill.innerHTML = '<span class="dot ' + (kind === "live" ? "pulse" : "") + '"></span>' + text;
+}
+
+function stopLive(){
+  liveRunning = false;
+  awaitingReply = false;
+  if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  const video = $("liveVideo");
+  if (video) video.srcObject = null;
+
+  $("liveStage").classList.add("hidden");
+  $("livePlaceholder").classList.remove("hidden");
+  $("liveStart").classList.remove("hidden");
+  $("liveStop").classList.add("hidden");
+  $("liveReset").classList.add("hidden");
+  $("pillFps").classList.add("hidden");
+  setLivePill("off", "offline");
+  lastTracks = [];
+}
+
+window.addEventListener("beforeunload", stopLive);
 </script>
 </body>
 </html>

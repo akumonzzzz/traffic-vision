@@ -7,3 +7,11 @@ python-multipart==0.0.20
 pillow==11.3.0
 opencv-python-headless==4.12.0.88
 numpy>=2.1,<3
+
+# Tracking (ByteTrack) needs a linear-assignment solver; ultralytics will
+# auto-install it at first use otherwise, which fails in a read-only container.
+lap==0.5.13
+
+# Ships a static ffmpeg with libx264 on every platform. OpenCV's own writer
+# only reaches codecs that browsers refuse to play inline.
+imageio-ffmpeg==0.6.0
