@@ -15,8 +15,8 @@ Real-time traffic object detection and vehicle tracking. Detects vehicles,
 pedestrians and road signage in **images, video clips, and live camera feeds**,
 assigns each vehicle a persistent ID, and counts it as it crosses a virtual line.
 
-**[▶ Live demo](https://huggingface.co/spaces/YOUR_HF_USERNAME/traffic-vision)** ·
-**[API docs](https://huggingface.co/spaces/YOUR_HF_USERNAME/traffic-vision/docs)**
+**[▶ Live demo](https://huggingface.co/spaces/KaiVQ/traffic-vision)** ·
+**[API docs](https://huggingface.co/spaces/KaiVQ/traffic-vision/docs)**
 
 ![The console: clip analysis with tracking and line counting](docs/console.jpg)
 
