@@ -22,10 +22,28 @@ RUN useradd -m -u 1000 appuser
 WORKDIR /app
 
 # CPU-only torch first, then the rest. Separate layer = cached across code edits.
+#
+# The opencv dance below is load-bearing, and both halves are needed.
+#
+# Ultralytics declares `opencv-python` (the GUI build) as a dependency, so pip
+# installs it alongside the `opencv-python-headless` we asked for. The GUI build
+# links libxcb/libGL, which a slim image does not carry, so `import cv2` dies
+# with "libxcb.so.1: cannot open shared object file".
+#
+# Uninstalling it is not enough on its own: both wheels unpack into the *same*
+# cv2/ directory, so removing one deletes files the other still needs and leaves
+# a hollow module ("cv2 has no attribute __version__"). Reinstalling headless
+# afterwards restores that directory with headless as its sole owner.
+#
+# The import check makes a regression here fail the build instead of the
+# container dying at runtime.
 COPY requirements.txt .
 RUN pip install --index-url https://download.pytorch.org/whl/cpu \
         torch torchvision \
- && pip install -r requirements.txt
+ && pip install -r requirements.txt \
+ && pip uninstall -y opencv-python opencv-contrib-python \
+ && pip install --force-reinstall --no-deps opencv-python-headless==4.12.0.88 \
+ && python -c "import cv2; print('cv2', cv2.__version__, 'headless OK')"
 
 COPY --chown=appuser:appuser app ./app
 
