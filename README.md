@@ -62,7 +62,7 @@ python scripts/stream.py --source "rtsp://user:pass@10.0.0.20:554/stream1" --csv
 | **Video throughput** | ~17 fps, CPU-only, 960 px |
 | **Live throughput** | ~12–15 fps per session, two concurrent sessions |
 | **Serving** | FastAPI + Uvicorn, REST + WebSocket |
-| **Container** | Python 3.12-slim, CPU-only torch (~1 GB image) |
+| **Container** | Python 3.12-slim, CPU-only torch (2.29 GB image, measured) |
 
 ---
 

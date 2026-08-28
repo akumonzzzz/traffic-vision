@@ -1,5 +1,6 @@
 # Inference + serving. Torch itself is installed from the CPU wheel index in
-# the Dockerfile so the image stays ~1 GB instead of ~6 GB with CUDA.
+# the Dockerfile: the CPU wheels build a 2.29 GB image, where the default CUDA
+# wheels would add several GB of nvidia libraries this project never uses.
 ultralytics==8.4.120
 fastapi==0.120.1
 uvicorn[standard]==0.38.0
