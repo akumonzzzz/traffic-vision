@@ -287,13 +287,11 @@ Stated plainly, because they are the honest state of the project:
 - [ ] Persist counts to a time-series store for traffic-flow dashboards
 
 ---
-
 ## License
 
-AGPL-3.0, inherited from [Ultralytics](https://github.com/ultralytics/ultralytics),
-which this project depends on for inference. AGPL's network clause covers
-software served over a network, so a public deployment must offer its source —
-which is what this repository is.
+Copyright (C) 2026 Duy Vuong Quang
 
-For a permissive license, replace the Ultralytics dependency with an ONNX export
-served through `onnxruntime`, or obtain an Ultralytics Enterprise License.
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version. See [AGPL-3.0](AGPL-3.0) for the full text.
