@@ -265,6 +265,24 @@ footer a{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--l
 footer a:hover{color:var(--amber);border-color:var(--amber)}
 :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 
+
+/* ============ dock: the car stays with you ============ */
+#dock{
+  max-width:1500px;margin:0 auto 22px;padding:0 22px;
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;
+}
+#dock.hidden{display:none !important}
+@media(max-width:700px){#dock{grid-template-columns:1fr}}
+#dockCanvas{
+  width:100%;height:172px;display:block;border-radius:11px;
+  border:1px solid var(--line);background:#0a0f16;touch-action:none;
+}
+.dock-hint{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  font-size:12px;color:var(--dim);
+}
+.dock-hint b{color:var(--green)}
+
 /* ============ garage: drivable landing layer ============ */
 #garage{
   position:fixed;inset:0;z-index:200;background:var(--bg);
@@ -576,6 +594,15 @@ kbd{
     </section>
 
   </main>
+</div>
+
+
+<div id="dock" class="hidden">
+  <canvas id="dockCanvas"></canvas>
+  <div class="dock-hint">
+    <span><kbd>A</kbd> drive left through <b>EXIT</b> to return</span>
+    <button class="skip" id="dockExit" type="button">Back to garage</button>
+  </div>
 </div>
 
 <footer>
@@ -1168,12 +1195,16 @@ window.addEventListener("beforeunload", stopLive);
 setMode("image");
 
 /* =======================================================================
-   MODE 0 — the garage: drive a car into a bay to open that mode
+   MODE 0 — the garage: a small 3D scene you drive
    ----------------------------------------------------------------------
-   Everything is drawn to a 2D canvas rather than WebGL: no dependency, no
-   build step, and a deliberate toy look reads better than a rough 3D one.
-   The same draw function renders both the on-screen view and the offscreen
-   frame sent to the detector, so the panel is judging exactly what you see.
+   Real 3D, but hand-rolled: boxes in world space, perspective projection,
+   painter's algorithm, one directional light. About 150 lines, versus ~600 KB
+   for a WebGL library -- and because it draws to a plain 2D context, the same
+   render can be captured for the detector with no readPixels dance.
+
+   Two views share this renderer. The full garage, where you pick a mode by
+   driving into a bay; and a dock strip that stays with you afterwards, where
+   driving out through the EXIT arch brings the garage back.
    ======================================================================= */
 (function garage(){
   const root = $("garage");
@@ -1182,316 +1213,375 @@ setMode("image");
   const SEEN = "tv_garage_seen";
   const cv = $("garageCanvas"), ctx = cv.getContext("2d");
   const gapCv = $("gapCanvas"), gapCtx = gapCv.getContext("2d");
+  const dockCv = $("dockCanvas"), dockCtx = dockCv ? dockCv.getContext("2d") : null;
 
-  // World is a fixed rectangle scaled to fit, so all three bays are always
-  // visible -- a landing screen should never hide its own exits.
-  const W = 1000, H = 620;
   const BAYS = [
-    { id: "image", label: "IMAGE", sub: "single frame", x: 90,  y: 90,  w: 240, h: 150 },
-    { id: "video", label: "VIDEO", sub: "tracking",     x: 670, y: 90,  w: 240, h: 150 },
-    { id: "live",  label: "LIVE",  sub: "camera",       x: 380, y: 400, w: 240, h: 150 },
+    { id: "image", label: "IMAGE", sub: "single frame", x: -11, z: -5 },
+    { id: "video", label: "VIDEO", sub: "tracking",     x:   0, z: -5 },
+    { id: "live",  label: "LIVE",  sub: "camera",       x:  11, z: -5 },
   ];
+  const BAY_W = 7.4, BAY_D = 5.6;
+  const BOUND = { x: 17, z: 9 };
 
-  const car = { x: W / 2, y: 250, a: Math.PI / 2, v: 0 };
+  const car = { x: 0, z: 4, a: 0, v: 0 };
   const keys = Object.create(null);
   const touch = { fwd: 0, turn: 0 };
-  let dwell = null, done = false, raf = 0, last = 0;
-  let view = { s: 1, ox: 0, oy: 0 };
+  let dwell = null, mode = "garage", raf = 0, last = 0, probeTimer = 0;
 
-  /* ---------- input ---------- */
-  const KEYMAP = {
-    ArrowUp: "up", KeyW: "up", ArrowDown: "down", KeyS: "down",
-    ArrowLeft: "left", KeyA: "left", ArrowRight: "right", KeyD: "right",
-  };
-  addEventListener("keydown", (e) => {
-    if (root.classList.contains("hidden")) return;
-    const k = KEYMAP[e.code];
-    if (k) { keys[k] = true; e.preventDefault(); }
-    if (e.code === "Escape") finish(null);
-  });
-  addEventListener("keyup", (e) => {
-    const k = KEYMAP[e.code];
-    if (k) keys[k] = false;
-  });
-  for (const btn of root.querySelectorAll(".pad button")) {
-    const set = (v) => () => {
-      if (btn.dataset.dir === "up") touch.fwd = v;
-      else if (btn.dataset.dir === "down") touch.fwd = -v;
-      else touch.turn = btn.dataset.dir === "left" ? -v : v;
+  /* ---------------- 3D core ---------------- */
+  // Camera looks along -Z with a downward pitch. Projection is the textbook
+  // pinhole: rotate into camera space, divide by depth.
+  function makeProject(cam, w, h){
+    const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+    const f = cam.focal * h;
+    return function (p) {
+      const x = p[0] - cam.x;
+      const yv = p[1] - cam.y;
+      // Depth grows *away* from the camera, which sits at +z looking toward the
+      // origin -- so it is cam.z - p.z, not the other way round. Getting this
+      // backwards makes every point fail the near-plane test and the scene
+      // renders as an empty rectangle.
+      const d = cam.z - p[2];
+      const depth = d * cp - yv * sp;
+      const up = yv * cp + d * sp;
+      if (depth <= 0.35) return null;
+      const s = f / depth;
+      return [w / 2 + x * s, h / 2 - up * s, depth];
     };
-    btn.addEventListener("pointerdown", (e) => { e.preventDefault(); set(1)(); });
-    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) {
-      btn.addEventListener(ev, set(0));
+  }
+
+  const LIGHT = (function(){
+    const v = [-0.42, 0.86, 0.30];
+    const m = Math.hypot(v[0], v[1], v[2]);
+    return [v[0]/m, v[1]/m, v[2]/m];
+  })();
+
+  function shade(hex, n){
+    // Lambert against a fixed key light, floored so no face goes fully black.
+    const l = Math.max(0, n[0]*LIGHT[0] + n[1]*LIGHT[1] + n[2]*LIGHT[2]);
+    const k = 0.42 + 0.58 * l;
+    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    return "rgb(" + Math.round(r*k) + "," + Math.round(g*k) + "," + Math.round(b*k) + ")";
+  }
+
+  function box(cx, cy, cz, sx, sy, sz, ry, color, out){
+    const c = Math.cos(ry), s = Math.sin(ry);
+    const hx = sx/2, hy = sy/2, hz = sz/2;
+    const pt = (x, y, z) => [cx + x*c - z*s, cy + y, cz + x*s + z*c];
+    const v = [
+      pt(-hx,-hy,-hz), pt(hx,-hy,-hz), pt(hx,hy,-hz), pt(-hx,hy,-hz),
+      pt(-hx,-hy, hz), pt(hx,-hy, hz), pt(hx,hy, hz), pt(-hx,hy, hz),
+    ];
+    const rot = (nx, ny, nz) => [nx*c - nz*s, ny, nx*s + nz*c];
+    const faces = [
+      [[4,5,6,7], rot(0,0,1)], [[1,0,3,2], rot(0,0,-1)],
+      [[5,1,2,6], rot(1,0,0)], [[0,4,7,3], rot(-1,0,0)],
+      [[3,7,6,2], rot(0,1,0)], [[0,1,5,4], rot(0,-1,0)],
+    ];
+    for (const [idx, n] of faces) {
+      out.push({ p: idx.map(i => v[i]), color: shade(color, n) });
     }
   }
 
-  /* ---------- physics ---------- */
-  function step(dt){
-    const fwd = (keys.up ? 1 : 0) - (keys.down ? 1 : 0) + touch.fwd;
-    const turn = (keys.right ? 1 : 0) - (keys.left ? 1 : 0) + touch.turn;
-
-    car.v += fwd * 520 * dt;
-    car.v *= Math.pow(0.12, dt);              // drag, frame-rate independent
-    car.v = Math.max(-190, Math.min(340, car.v));
-
-    // Steering scales with speed: a stationary car should not pirouette.
-    const grip = Math.min(1, Math.abs(car.v) / 90);
-    car.a += turn * 2.9 * dt * grip * Math.sign(car.v || 1);
-
-    car.x += Math.cos(car.a) * car.v * dt;
-    car.y += Math.sin(car.a) * car.v * dt;
-
-    const m = 34;
-    car.x = Math.max(m, Math.min(W - m, car.x));
-    car.y = Math.max(m, Math.min(H - m, car.y));
-
-    // Dwell inside a bay to select it -- a brush past should not fire.
-    const inside = BAYS.find(b =>
-      car.x > b.x && car.x < b.x + b.w && car.y > b.y && car.y < b.y + b.h);
-    if (!inside) { dwell = null; return; }
-    if (!dwell || dwell.id !== inside.id) dwell = { id: inside.id, t: 0 };
-    dwell.t += dt;
-    if (dwell.t >= 0.85) finish(inside.id);
-  }
-
-  /* ---------- drawing ---------- */
-  // Top-down car. The silhouette has to read as a vehicle to a human first --
-  // if it does not, the detector panel below is only proving the render is bad.
-  // So: wheels protruding at four corners, a cabin narrower than the body, and
-  // glass banded across the width rather than blobbed along the length.
-  function drawCar(c, x, y, a, scale){
-    c.save();
-    c.translate(x, y);
-    c.rotate(a);
-    c.scale(scale, scale);
-
-    const L = 108, Wd = 54;                       // length, width
-
-    c.fillStyle = "rgba(0,0,0,.30)";
-    c.beginPath(); c.ellipse(0, 0, L * 0.54, Wd * 0.56, 0, 0, 7); c.fill();
-
-    // wheels first, so they read as sticking out past the bodywork
-    c.fillStyle = "#12161c";
-    for (const wx of [-L * 0.28, L * 0.30]) {
-      for (const wy of [-Wd * 0.56, Wd * 0.56]) {
-        c.beginPath(); c.roundRect(wx - 12, wy - 7, 24, 14, 5); c.fill();
+  function carFaces(x, z, a, out){
+    const BODY = "#f5a524", DARK = "#c07d10", GLASS = "#3f7ba6", TYRE = "#14181f";
+    box(x, 0.62, z, 4.0, 0.78, 1.9, a, BODY, out);           // lower body
+    box(x - Math.cos(a)*0.25, 1.30, z - Math.sin(a)*0.25,
+        2.0, 0.72, 1.66, a, DARK, out);                       // cabin
+    box(x + Math.cos(a)*0.78, 1.28, z + Math.sin(a)*0.78,
+        0.16, 0.56, 1.5, a, GLASS, out);                      // windscreen
+    box(x - Math.cos(a)*1.28, 1.28, z - Math.sin(a)*1.28,
+        0.16, 0.52, 1.44, a, GLASS, out);                     // rear screen
+    for (const dx of [1.25, -1.25]) {
+      for (const dz of [1.02, -1.02]) {
+        const wx = x + Math.cos(a)*dx - Math.sin(a)*dz;
+        const wz = z + Math.sin(a)*dx + Math.cos(a)*dz;
+        box(wx, 0.42, wz, 0.9, 0.84, 0.36, a, TYRE, out);
       }
     }
-
-    // body
-    const paint = c.createLinearGradient(0, -Wd / 2, 0, Wd / 2);
-    paint.addColorStop(0, "#ffd071");
-    paint.addColorStop(.45, "#f5a524");
-    paint.addColorStop(1, "#b9760a");
-    c.fillStyle = paint;
-    c.beginPath(); c.roundRect(-L / 2, -Wd / 2 + 3, L, Wd - 6, 15); c.fill();
-
-    // bonnet and boot creases
-    c.strokeStyle = "rgba(0,0,0,.16)"; c.lineWidth = 1.6;
-    c.beginPath(); c.moveTo(L * 0.20, -Wd / 2 + 6); c.lineTo(L * 0.20, Wd / 2 - 6); c.stroke();
-    c.beginPath(); c.moveTo(-L * 0.30, -Wd / 2 + 6); c.lineTo(-L * 0.30, Wd / 2 - 6); c.stroke();
-
-    // cabin: a darker panel narrower than the body
-    c.fillStyle = "#0f1a24";
-    c.beginPath(); c.roundRect(-L * 0.30, -Wd * 0.36, L * 0.50, Wd * 0.72, 9); c.fill();
-
-    // windscreen (front) and rear screen, banded across the width
-    const glass = c.createLinearGradient(0, -Wd / 2, 0, Wd / 2);
-    glass.addColorStop(0, "#7fb2d9");
-    glass.addColorStop(.5, "#4a7fa8");
-    glass.addColorStop(1, "#2d5372");
-    c.fillStyle = glass;
-    c.beginPath();
-    c.moveTo(L * 0.19, -Wd * 0.31); c.lineTo(L * 0.19, Wd * 0.31);
-    c.lineTo(L * 0.10, Wd * 0.27);  c.lineTo(L * 0.10, -Wd * 0.27);
-    c.closePath(); c.fill();
-    c.beginPath();
-    c.moveTo(-L * 0.29, -Wd * 0.31); c.lineTo(-L * 0.29, Wd * 0.31);
-    c.lineTo(-L * 0.20, Wd * 0.27);  c.lineTo(-L * 0.20, -Wd * 0.27);
-    c.closePath(); c.fill();
-
-    // roof
-    c.fillStyle = "#e0952a";
-    c.beginPath(); c.roundRect(-L * 0.19, -Wd * 0.30, L * 0.28, Wd * 0.60, 6); c.fill();
-
-    // mirrors
-    c.fillStyle = "#c98a1c";
-    c.beginPath(); c.roundRect(L * 0.13, -Wd * 0.60, 9, 6, 2); c.fill();
-    c.beginPath(); c.roundRect(L * 0.13, Wd * 0.60 - 6, 9, 6, 2); c.fill();
-
-    // lamps
-    c.fillStyle = "#fff4d2";
-    c.beginPath(); c.roundRect(L * 0.45, -Wd * 0.34, 7, 12, 3); c.fill();
-    c.beginPath(); c.roundRect(L * 0.45, Wd * 0.34 - 12, 7, 12, 3); c.fill();
-    c.fillStyle = "#ff5d5d";
-    c.beginPath(); c.roundRect(-L / 2 - 1, -Wd * 0.32, 6, 10, 2); c.fill();
-    c.beginPath(); c.roundRect(-L / 2 - 1, Wd * 0.32 - 10, 6, 10, 2); c.fill();
-
-    c.restore();
+    box(x + Math.cos(a)*2.02, 0.70, z + Math.sin(a)*2.02,
+        0.10, 0.30, 1.3, a, "#fff3cf", out);                  // headlamp bar
+    box(x - Math.cos(a)*2.02, 0.72, z - Math.sin(a)*2.02,
+        0.10, 0.26, 1.25, a, "#e2483f", out);                 // tail bar
   }
 
-  function drawWorld(c, scale, ox, oy, withUi){
-    c.save();
-    c.translate(ox, oy);
-    c.scale(scale, scale);
+  function drawScene(c, w, h, cam, opts){
+    const project = makeProject(cam, w, h);
+    c.fillStyle = "#0a0f16";
+    c.fillRect(0, 0, w, h);
 
-    c.fillStyle = "#101822";
-    c.fillRect(0, 0, W, H);
+    // ground grid
+    c.strokeStyle = "rgba(255,255,255,.07)";
+    c.lineWidth = 1;
+    const gx = opts.gridX || 20, gz = opts.gridZ || 12;
+    for (let i = -gx; i <= gx; i += 2) {
+      const a = project([i, 0, -gz]), b = project([i, 0, gz]);
+      if (a && b) { c.beginPath(); c.moveTo(a[0],a[1]); c.lineTo(b[0],b[1]); c.stroke(); }
+    }
+    for (let k = -gz; k <= gz; k += 2) {
+      const a = project([-gx, 0, k]), b = project([gx, 0, k]);
+      if (a && b) { c.beginPath(); c.moveTo(a[0],a[1]); c.lineTo(b[0],b[1]); c.stroke(); }
+    }
 
-    // lane grid, faint
-    c.strokeStyle = "rgba(255,255,255,.045)";
-    c.lineWidth = 2;
-    for (let x = 0; x <= W; x += 50) { c.beginPath(); c.moveTo(x,0); c.lineTo(x,H); c.stroke(); }
-    for (let y = 0; y <= H; y += 50) { c.beginPath(); c.moveTo(0,y); c.lineTo(W,y); c.stroke(); }
+    // bay floor plates
+    if (opts.bays) {
+      for (const bay of BAYS) {
+        const on = dwell && dwell.id === bay.id;
+        const p = on ? Math.min(1, dwell.t / 0.85) : 0;
+        const corners = [
+          [bay.x - BAY_W/2, 0.02, bay.z - BAY_D/2],
+          [bay.x + BAY_W/2, 0.02, bay.z - BAY_D/2],
+          [bay.x + BAY_W/2, 0.02, bay.z + BAY_D/2],
+          [bay.x - BAY_W/2, 0.02, bay.z + BAY_D/2],
+        ].map(project);
+        if (corners.some(v => !v)) continue;
+        c.beginPath();
+        c.moveTo(corners[0][0], corners[0][1]);
+        for (let i = 1; i < 4; i++) c.lineTo(corners[i][0], corners[i][1]);
+        c.closePath();
+        c.fillStyle = on ? "rgba(245,165,36,.20)" : "rgba(255,255,255,.045)";
+        c.fill();
+        c.strokeStyle = on ? "#f5a524" : "rgba(255,255,255,.28)";
+        c.lineWidth = on ? 3 : 2;
+        c.setLineDash(on ? [] : [10, 8]);
+        c.stroke();
+        c.setLineDash([]);
 
-    for (const b of BAYS) {
-      const active = dwell && dwell.id === b.id;
-      const p = active ? Math.min(1, dwell.t / 0.85) : 0;
-
-      c.fillStyle = active ? "rgba(245,165,36,.13)" : "rgba(255,255,255,.028)";
-      c.beginPath(); c.roundRect(b.x, b.y, b.w, b.h, 14); c.fill();
-
-      c.strokeStyle = active ? "#f5a524" : "rgba(255,255,255,.22)";
-      c.lineWidth = 3;
-      c.setLineDash(active ? [] : [12, 9]);
-      c.beginPath(); c.roundRect(b.x, b.y, b.w, b.h, 14); c.stroke();
-      c.setLineDash([]);
-
-      if (withUi) {
-        c.textAlign = "center";
-        c.fillStyle = active ? "#f5a524" : "rgba(231,236,244,.9)";
-        c.font = "700 30px Inter, system-ui, sans-serif";
-        c.fillText(b.label, b.x + b.w / 2, b.y + b.h / 2 + 2);
-        c.fillStyle = "rgba(231,236,244,.42)";
-        c.font = "500 14px Inter, system-ui, sans-serif";
-        c.fillText(b.sub, b.x + b.w / 2, b.y + b.h / 2 + 26);
-
-        if (p > 0) {
-          c.strokeStyle = "#f5a524"; c.lineWidth = 5; c.lineCap = "round";
-          c.beginPath();
-          c.arc(b.x + b.w / 2, b.y + 26, 13, -Math.PI/2, -Math.PI/2 + p * Math.PI * 2);
-          c.stroke(); c.lineCap = "butt";
+        const lab = project([bay.x, 2.6, bay.z]);
+        if (lab) {
+          c.textAlign = "center";
+          c.fillStyle = on ? "#f5a524" : "rgba(231,236,244,.92)";
+          c.font = "700 " + Math.round(30 * (h/620)) + "px Inter, system-ui, sans-serif";
+          c.fillText(bay.label, lab[0], lab[1]);
+          c.fillStyle = "rgba(231,236,244,.4)";
+          c.font = "500 " + Math.round(14 * (h/620)) + "px Inter, system-ui, sans-serif";
+          c.fillText(bay.sub, lab[0], lab[1] + Math.round(20*(h/620)));
+          if (p > 0) {
+            c.strokeStyle = "#f5a524"; c.lineWidth = 4; c.lineCap = "round";
+            c.beginPath();
+            c.arc(lab[0], lab[1] - 34*(h/620), 12*(h/620), -Math.PI/2, -Math.PI/2 + p*Math.PI*2);
+            c.stroke(); c.lineCap = "butt";
+          }
         }
       }
     }
 
-    drawCar(c, car.x, car.y, car.a, 1);
-    c.restore();
+    // exit arch, dock view only
+    if (opts.exit) {
+      const faces = [];
+      box(-7.2, 1.6, 0, 0.5, 3.2, 0.5, 0, "#2a3444", faces);
+      box(-7.2, 1.6, 4.0, 0.5, 3.2, 0.5, 0, "#2a3444", faces);
+      box(-7.2, 3.4, 2.0, 0.5, 0.7, 4.6, 0, "#21d07a", faces);
+      paint(c, faces, project);
+      const sign = project([-7.2, 3.42, 2.0]);
+      if (sign) {
+        c.textAlign = "center";
+        c.fillStyle = "#06210f";
+        c.font = "700 " + Math.round(15*(h/220)) + "px Inter, system-ui, sans-serif";
+        c.fillText("EXIT", sign[0], sign[1] + 5);
+      }
+    }
+
+    const faces = [];
+    carFaces(car.x, car.z, car.a, faces);
+    paint(c, faces, project);
   }
 
-  function fit(){
-    const dpr = Math.min(2, devicePixelRatio || 1);
-    const r = cv.getBoundingClientRect();
-    cv.width = Math.round(r.width * dpr);
-    cv.height = Math.round(r.height * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const s = Math.min(r.width / W, r.height / H) * 0.94;
-    view = { s, ox: (r.width - W * s) / 2, oy: (r.height - H * s) / 2, w: r.width, h: r.height };
+  function paint(c, faces, project){
+    const drawable = [];
+    for (const f of faces) {
+      const pts = f.p.map(project);
+      if (pts.some(v => !v)) continue;
+      let d = 0; for (const v of pts) d += v[2];
+      drawable.push({ pts, color: f.color, d: d / pts.length });
+    }
+    drawable.sort((a, b) => b.d - a.d);       // painter's algorithm
+    for (const f of drawable) {
+      c.beginPath();
+      c.moveTo(f.pts[0][0], f.pts[0][1]);
+      for (let i = 1; i < f.pts.length; i++) c.lineTo(f.pts[i][0], f.pts[i][1]);
+      c.closePath();
+      c.fillStyle = f.color;
+      c.fill();
+      c.strokeStyle = "rgba(0,0,0,.30)";
+      c.lineWidth = 1;
+      c.stroke();
+    }
   }
-  addEventListener("resize", fit);
+
+  /* ---------------- input ---------------- */
+  const KEYMAP = {
+    ArrowUp:"up", KeyW:"up", ArrowDown:"down", KeyS:"down",
+    ArrowLeft:"left", KeyA:"left", ArrowRight:"right", KeyD:"right",
+  };
+  addEventListener("keydown", (e) => {
+    if (mode === "off") return;
+    const k = KEYMAP[e.code];
+    if (k) { keys[k] = true; e.preventDefault(); }
+    if (e.code === "Escape" && mode === "garage") pick(null);
+  });
+  addEventListener("keyup", (e) => { const k = KEYMAP[e.code]; if (k) keys[k] = false; });
+
+  for (const btn of root.querySelectorAll(".pad button")) {
+    const set = (v) => (e) => {
+      if (e) e.preventDefault();
+      if (btn.dataset.dir === "up") touch.fwd = v;
+      else if (btn.dataset.dir === "down") touch.fwd = -v;
+      else touch.turn = btn.dataset.dir === "left" ? -v : v;
+    };
+    btn.addEventListener("pointerdown", set(1));
+    for (const ev of ["pointerup","pointercancel","pointerleave"]) btn.addEventListener(ev, set(0));
+  }
+
+  /* ---------------- simulation ---------------- */
+  function step(dt){
+    const fwd = (keys.up?1:0) - (keys.down?1:0) + touch.fwd;
+    const turn = (keys.right?1:0) - (keys.left?1:0) + touch.turn;
+
+    car.v += fwd * 17 * dt;
+    car.v *= Math.pow(0.14, dt);
+    car.v = Math.max(-6.5, Math.min(11.5, car.v));
+
+    const grip = Math.min(1, Math.abs(car.v) / 2.6);
+    car.a += turn * 2.5 * dt * grip * Math.sign(car.v || 1);
+
+    car.x += Math.cos(car.a) * car.v * dt;
+    car.z += Math.sin(car.a) * car.v * dt;
+
+    if (mode === "garage") {
+      car.x = Math.max(-BOUND.x, Math.min(BOUND.x, car.x));
+      car.z = Math.max(-BOUND.z, Math.min(BOUND.z, car.z));
+
+      const hit = BAYS.find(b =>
+        Math.abs(car.x - b.x) < BAY_W/2 && Math.abs(car.z - b.z) < BAY_D/2);
+      if (!hit) { dwell = null; return; }
+      if (!dwell || dwell.id !== hit.id) dwell = { id: hit.id, t: 0 };
+      dwell.t += dt;
+      if (dwell.t >= 0.85) pick(hit.id);
+    } else {
+      car.z = Math.max(-1.6, Math.min(5.6, car.z));
+      car.x = Math.min(7, car.x);
+      if (car.x < -8.2) reopen();          // driven out through the exit
+    }
+  }
+
+  /* ---------------- views ---------------- */
+  const GARAGE_CAM = { x: 0, y: 11.5, z: 17.5, pitch: 0.56, focal: 0.95 };
+  const DOCK_CAM   = { x: -1.2, y: 3.1, z: 8.4, pitch: 0.27, focal: 0.60 };
+
+  function fitCanvas(canvas, c){
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    const r = canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    canvas.width = Math.round(r.width * dpr);
+    canvas.height = Math.round(r.height * dpr);
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return r;
+  }
 
   function frame(ts){
-    if (done) return;
     const dt = Math.min(0.05, (ts - last) / 1000 || 0);
     last = ts;
     step(dt);
-    ctx.clearRect(0, 0, view.w || 0, view.h || 0);
-    drawWorld(ctx, view.s, view.ox, view.oy, true);
+
+    if (mode === "garage") {
+      const r = fitCanvas(cv, ctx);
+      if (r) drawScene(ctx, r.width, r.height, GARAGE_CAM, { bays: true });
+    } else if (mode === "dock" && dockCv) {
+      const r = fitCanvas(dockCv, dockCtx);
+      if (r) drawScene(dockCtx, r.width, r.height, DOCK_CAM,
+                       { exit: true, gridX: 10, gridZ: 6 });
+    }
     raf = requestAnimationFrame(frame);
   }
 
-  /* ---------- the detector's opinion ---------- */
-  // Rendered at the scale that gave the model its best shot in testing; the
-  // point is a fair reading of the scene, not a rigged one.
+  /* ---------------- detector panel ---------------- */
   const shot = document.createElement("canvas");
   shot.width = 720; shot.height = 450;
   const shotCtx = shot.getContext("2d");
   let probing = false;
 
   async function probe(){
-    if (done || probing || !window.fetch) return;
+    if (mode !== "garage" || probing) return;
     probing = true;
     try {
-      const s = 1.15;
-      shotCtx.fillStyle = "#101822";
-      shotCtx.fillRect(0, 0, shot.width, shot.height);
-      drawWorld(shotCtx, s, shot.width / 2 - car.x * s, shot.height / 2 - car.y * s, false);
-
-      const blob = await new Promise(r => shot.toBlob(r, "image/jpeg", 0.9));
+      // A close, level camera on the car: the fairest look the model can get.
+      drawScene(shotCtx, shot.width, shot.height,
+                { x: car.x, y: 4.4, z: car.z + 9.5, pitch: 0.34, focal: 0.95 },
+                { gridX: 14, gridZ: 10 });
+      const blob = await new Promise(r => shot.toBlob(r, "image/jpeg", 0.92));
       if (!blob) return;
       const fd = new FormData();
       fd.append("file", blob, "scene.jpg");
       fd.append("conf", "0.10");
       fd.append("annotate", "false");
       fd.append("night_mode", "off");
-
       const res = await fetch("/api/detect", { method: "POST", body: fd });
       if (!res.ok) return;
-      const data = await res.json();
-      renderGap(data);
-    } catch (e) {
-      /* the panel is a flourish; never let it break the landing screen */
-    } finally {
-      probing = false;
-    }
+      renderGap(await res.json());
+    } catch (e) { /* a flourish must never break the landing screen */ }
+    finally { probing = false; }
   }
 
   function renderGap(data){
     gapCv.width = shot.width; gapCv.height = shot.height;
     gapCtx.drawImage(shot, 0, 0);
     const top = data.detections && data.detections[0];
-
     if (top) {
       const rgb = COLORS[top.class_name] || "245,165,36";
       gapCtx.strokeStyle = "rgb(" + rgb + ")";
       gapCtx.lineWidth = 4;
       gapCtx.strokeRect(top.x1, top.y1, top.x2 - top.x1, top.y2 - top.y1);
-      gapCtx.fillStyle = "rgb(" + rgb + ")";
-      gapCtx.font = "600 22px Inter, system-ui, sans-serif";
       const label = top.class_name + " " + Math.round(top.confidence * 100) + "%";
+      gapCtx.font = "600 22px Inter, system-ui, sans-serif";
       const tw = gapCtx.measureText(label).width;
+      gapCtx.fillStyle = "rgb(" + rgb + ")";
       gapCtx.fillRect(top.x1, Math.max(0, top.y1 - 30), tw + 16, 30);
       gapCtx.fillStyle = "#0b0f16";
       gapCtx.fillText(label, top.x1 + 8, Math.max(22, top.y1 - 8));
     }
-
     $("gapVerdict").innerHTML = top
-      ? 'sees <b>' + esc(top.class_name) + '</b> ' +
-        Math.round(top.confidence * 100) + '%'
+      ? 'sees <b>' + esc(top.class_name) + '</b> ' + Math.round(top.confidence * 100) + '%'
       : '<span class="miss">sees nothing at all</span>';
   }
 
-  /* ---------- lifecycle ---------- */
-  function finish(mode){
-    if (done) return;
-    done = true;
-    cancelAnimationFrame(raf);
+  /* ---------------- transitions ---------------- */
+  function pick(target){
+    mode = target ? "dock" : "off";
+    dwell = null;
     clearInterval(probeTimer);
     try { localStorage.setItem(SEEN, "1"); } catch (e) {}
     root.classList.add("hidden");
-    if (mode) setMode(mode);
+    if (target) {
+      setMode(target);
+      car.x = 3.4; car.z = 2.0; car.a = Math.PI; car.v = 0;
+      if ($("dock")) $("dock").classList.remove("hidden");
+    } else if ($("dock")) {
+      $("dock").classList.add("hidden");
+    }
   }
 
-  let probeTimer = 0;
-
-  function start(){
-    done = false;
-    car.x = W / 2; car.y = 250; car.a = Math.PI / 2; car.v = 0;
+  function reopen(){
+    mode = "garage";
+    car.x = 0; car.z = 4; car.a = -Math.PI/2; car.v = 0;
     dwell = null;
+    if ($("dock")) $("dock").classList.add("hidden");
     root.classList.remove("hidden");
-    fit();
-    last = performance.now();
-    raf = requestAnimationFrame(frame);
     probe();
+    clearInterval(probeTimer);
     probeTimer = setInterval(probe, 2600);
   }
 
-  $("garageSkip").addEventListener("click", () => finish(null));
-  $("replayGarage").addEventListener("click", start);
+  $("garageSkip").addEventListener("click", () => pick(null));
+  $("replayGarage").addEventListener("click", reopen);
+  if ($("dockExit")) $("dockExit").addEventListener("click", reopen);
 
   let seen = false;
   try { seen = localStorage.getItem(SEEN) === "1"; } catch (e) {}
-  if (seen) { root.classList.add("hidden"); done = true; } else { start(); }
+  last = performance.now();
+  raf = requestAnimationFrame(frame);
+  if (seen) { mode = "off"; root.classList.add("hidden"); }
+  else { reopen(); }
 })();
 
 </script>
