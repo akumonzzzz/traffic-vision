@@ -101,3 +101,22 @@ def test_oversized_upload_is_rejected(client, monkeypatch):
         files={"file": ("big.jpg", make_image(), "image/jpeg")},
     )
     assert res.status_code == 413
+
+
+def test_console_revalidates_instead_of_caching(client):
+    """A stale console after a deploy is invisible to whoever shipped it."""
+    res = client.get("/")
+    assert res.status_code == 200
+    assert res.headers["cache-control"] == "no-cache"
+
+
+def test_static_assets_are_cacheable(client):
+    res = client.get("/static/samples/traffic1.jpg")
+    assert res.status_code == 200
+    assert "max-age" in res.headers["cache-control"]
+
+
+def test_api_responses_are_not_given_a_stale_cache_policy(client):
+    """The middleware must not attach asset caching to live API data."""
+    res = client.get("/api/health")
+    assert "max-age" not in res.headers.get("cache-control", "")

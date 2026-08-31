@@ -535,6 +535,32 @@ def summarize_names(names: list[str]) -> dict[str, int]:
     return dict(sorted(counts.items(), key=lambda kv: kv[1], reverse=True))
 
 
+@app.middleware("http")
+async def cache_headers(request, call_next):
+    """Make the console revalidate, and let its assets cache.
+
+    Without an explicit Cache-Control, browsers apply *heuristic* caching --
+    roughly 10% of the time since Last-Modified -- so after a deploy visitors can
+    sit on the previous UI for hours while the API already serves the new one.
+    That mismatch is invisible to whoever shipped the change and looks like a
+    broken page to everyone else.
+
+    "no-cache" does not mean "do not store": the browser keeps the file but must
+    revalidate, and the ETag makes that a cheap 304 when nothing changed.
+    """
+    response = await call_next(request)
+    path = request.url.path
+
+    if path == "/" or path.endswith(".html"):
+        response.headers["Cache-Control"] = "no-cache"
+    elif path.startswith("/static/"):
+        # Samples and icons are content that only changes on a deploy; an hour
+        # of caching keeps repeat visits fast without stranding anyone for long.
+        response.headers.setdefault("Cache-Control", "public, max-age=3600")
+
+    return response
+
+
 app.mount("/static", StaticFiles(directory=config.STATIC_DIR), name="static")
 
 
