@@ -264,9 +264,122 @@ footer{text-align:center;color:var(--dim);font-size:12px;padding:0 22px 40px}
 footer a{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--line-2)}
 footer a:hover{color:var(--amber);border-color:var(--amber)}
 :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+/* ============ garage: drivable landing layer ============ */
+#garage{
+  position:fixed;inset:0;z-index:200;background:var(--bg);
+  display:flex;flex-direction:column;
+}
+#garage.hidden{display:none !important}
+.garage-top{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:14px 22px;border-bottom:1px solid var(--line);
+}
+.garage-top .brand{margin-right:auto}
+.garage-hint{
+  font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px;
+}
+kbd{
+  font-family:var(--mono);font-size:11px;background:var(--panel-2);
+  border:1px solid var(--line-2);border-bottom-width:2px;border-radius:4px;
+  padding:2px 6px;color:var(--text);
+}
+.skip{
+  background:none;border:1px solid var(--line-2);color:var(--muted);
+  font-family:var(--sans);font-size:12.5px;font-weight:600;
+  padding:7px 13px;border-radius:7px;cursor:pointer;width:auto;margin:0;transition:.15s;
+}
+.skip:hover{border-color:var(--amber);color:var(--amber)}
+
+.garage-body{flex:1;position:relative;min-height:0}
+#garageCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+/* the detector's opinion of the rendered car */
+.gap-panel{
+  position:absolute;right:18px;bottom:18px;width:280px;
+  background:#0b0f16f2;border:1px solid var(--line);border-radius:11px;
+  padding:13px 14px;backdrop-filter:blur(8px);
+}
+@media(max-width:760px){.gap-panel{position:static;width:auto;margin:10px 14px 0}}
+.gap-panel h3{
+  font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  font-weight:600;margin:0 0 9px;display:flex;align-items:center;gap:7px;
+}
+.gap-panel canvas{
+  width:100%;border-radius:7px;background:#05070b;display:block;aspect-ratio:16/10;
+}
+.gap-verdict{
+  display:flex;align-items:baseline;gap:8px;margin-top:9px;font-family:var(--mono);
+  font-size:13px;
+}
+.gap-verdict b{font-size:17px;color:var(--amber);font-weight:500}
+.gap-verdict .miss{color:var(--red);font-size:14px}
+.gap-note{font-size:11px;color:var(--dim);line-height:1.45;margin-top:8px}
+.gap-note b{color:var(--muted);font-weight:600}
+
+/* touch controls, only where there is no keyboard */
+.pad{position:absolute;left:18px;bottom:18px;display:none;gap:8px;align-items:flex-end}
+@media(pointer:coarse){.pad{display:flex}}
+.pad button{
+  width:56px;height:56px;border-radius:14px;border:1px solid var(--line-2);
+  background:#0b0f16d9;color:var(--text);font-size:20px;cursor:pointer;
+  display:grid;place-items:center;margin:0;padding:0;user-select:none;
+}
+.pad button:active{background:var(--amber-dim);border-color:var(--amber);color:var(--amber)}
+.pad .col{display:flex;flex-direction:column;gap:8px}
+
+.replay{
+  background:none;border:1px solid var(--line);color:var(--dim);
+  font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.06em;
+  text-transform:uppercase;padding:5px 10px;border-radius:6px;cursor:pointer;
+  width:auto;margin:0;transition:.15s;
+}
+.replay:hover{border-color:var(--amber);color:var(--amber)}
+
 </style>
 </head>
 <body>
+
+<div id="garage" class="hidden">
+  <div class="garage-top">
+    <div class="brand">
+      <div class="signal" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div>
+        <h1>Traffic Vision</h1>
+        <span>Drive into a bay to begin</span>
+      </div>
+    </div>
+    <div class="garage-hint">
+      <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
+      <span>or arrow keys to drive</span>
+    </div>
+    <button class="skip" id="garageSkip" type="button">Skip to console &rarr;</button>
+  </div>
+
+  <div class="garage-body">
+    <canvas id="garageCanvas"></canvas>
+
+    <div class="gap-panel">
+      <h3><span class="dot" style="color:var(--amber)"></span>What the detector sees</h3>
+      <canvas id="gapCanvas"></canvas>
+      <div class="gap-verdict" id="gapVerdict">looking&hellip;</div>
+      <p class="gap-note">This is the <b>real model</b>, running on the scene above.
+      It was trained on photographs, so a flat-shaded render confuses it — usually
+      read as a bus or truck, sometimes missed entirely. That gap is exactly why
+      fine-tuning on real footage matters.</p>
+    </div>
+
+    <div class="pad" aria-hidden="true">
+      <button data-dir="left" type="button">&#8592;</button>
+      <div class="col">
+        <button data-dir="up" type="button">&#8593;</button>
+        <button data-dir="down" type="button">&#8595;</button>
+      </div>
+      <button data-dir="right" type="button">&#8594;</button>
+    </div>
+  </div>
+</div>
+
 
 <header class="topbar">
   <div class="brand">
@@ -280,6 +393,7 @@ footer a:hover{color:var(--amber);border-color:var(--amber)}
     <span class="pill" id="pillModel"><span class="dot" style="color:var(--dim)"></span>connecting</span>
     <span class="pill" id="pillDevice">—</span>
     <span class="pill hidden" id="pillFps">— <b>fps</b></span>
+    <button class="replay" id="replayGarage" type="button">Garage</button>
     <a class="pill" href="/docs" target="_blank" rel="noopener" style="text-decoration:none">API ↗</a>
   </div>
 </header>
@@ -1052,6 +1166,334 @@ window.addEventListener("beforeunload", stopLive);
 // Apply the default mode last: setMode -> stopLive touches `liveRunning`, which
 // is a `let` further up and therefore not initialised until this point.
 setMode("image");
+
+/* =======================================================================
+   MODE 0 — the garage: drive a car into a bay to open that mode
+   ----------------------------------------------------------------------
+   Everything is drawn to a 2D canvas rather than WebGL: no dependency, no
+   build step, and a deliberate toy look reads better than a rough 3D one.
+   The same draw function renders both the on-screen view and the offscreen
+   frame sent to the detector, so the panel is judging exactly what you see.
+   ======================================================================= */
+(function garage(){
+  const root = $("garage");
+  if (!root) return;
+
+  const SEEN = "tv_garage_seen";
+  const cv = $("garageCanvas"), ctx = cv.getContext("2d");
+  const gapCv = $("gapCanvas"), gapCtx = gapCv.getContext("2d");
+
+  // World is a fixed rectangle scaled to fit, so all three bays are always
+  // visible -- a landing screen should never hide its own exits.
+  const W = 1000, H = 620;
+  const BAYS = [
+    { id: "image", label: "IMAGE", sub: "single frame", x: 90,  y: 90,  w: 240, h: 150 },
+    { id: "video", label: "VIDEO", sub: "tracking",     x: 670, y: 90,  w: 240, h: 150 },
+    { id: "live",  label: "LIVE",  sub: "camera",       x: 380, y: 400, w: 240, h: 150 },
+  ];
+
+  const car = { x: W / 2, y: 250, a: Math.PI / 2, v: 0 };
+  const keys = Object.create(null);
+  const touch = { fwd: 0, turn: 0 };
+  let dwell = null, done = false, raf = 0, last = 0;
+  let view = { s: 1, ox: 0, oy: 0 };
+
+  /* ---------- input ---------- */
+  const KEYMAP = {
+    ArrowUp: "up", KeyW: "up", ArrowDown: "down", KeyS: "down",
+    ArrowLeft: "left", KeyA: "left", ArrowRight: "right", KeyD: "right",
+  };
+  addEventListener("keydown", (e) => {
+    if (root.classList.contains("hidden")) return;
+    const k = KEYMAP[e.code];
+    if (k) { keys[k] = true; e.preventDefault(); }
+    if (e.code === "Escape") finish(null);
+  });
+  addEventListener("keyup", (e) => {
+    const k = KEYMAP[e.code];
+    if (k) keys[k] = false;
+  });
+  for (const btn of root.querySelectorAll(".pad button")) {
+    const set = (v) => () => {
+      if (btn.dataset.dir === "up") touch.fwd = v;
+      else if (btn.dataset.dir === "down") touch.fwd = -v;
+      else touch.turn = btn.dataset.dir === "left" ? -v : v;
+    };
+    btn.addEventListener("pointerdown", (e) => { e.preventDefault(); set(1)(); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) {
+      btn.addEventListener(ev, set(0));
+    }
+  }
+
+  /* ---------- physics ---------- */
+  function step(dt){
+    const fwd = (keys.up ? 1 : 0) - (keys.down ? 1 : 0) + touch.fwd;
+    const turn = (keys.right ? 1 : 0) - (keys.left ? 1 : 0) + touch.turn;
+
+    car.v += fwd * 520 * dt;
+    car.v *= Math.pow(0.12, dt);              // drag, frame-rate independent
+    car.v = Math.max(-190, Math.min(340, car.v));
+
+    // Steering scales with speed: a stationary car should not pirouette.
+    const grip = Math.min(1, Math.abs(car.v) / 90);
+    car.a += turn * 2.9 * dt * grip * Math.sign(car.v || 1);
+
+    car.x += Math.cos(car.a) * car.v * dt;
+    car.y += Math.sin(car.a) * car.v * dt;
+
+    const m = 34;
+    car.x = Math.max(m, Math.min(W - m, car.x));
+    car.y = Math.max(m, Math.min(H - m, car.y));
+
+    // Dwell inside a bay to select it -- a brush past should not fire.
+    const inside = BAYS.find(b =>
+      car.x > b.x && car.x < b.x + b.w && car.y > b.y && car.y < b.y + b.h);
+    if (!inside) { dwell = null; return; }
+    if (!dwell || dwell.id !== inside.id) dwell = { id: inside.id, t: 0 };
+    dwell.t += dt;
+    if (dwell.t >= 0.85) finish(inside.id);
+  }
+
+  /* ---------- drawing ---------- */
+  // Top-down car. The silhouette has to read as a vehicle to a human first --
+  // if it does not, the detector panel below is only proving the render is bad.
+  // So: wheels protruding at four corners, a cabin narrower than the body, and
+  // glass banded across the width rather than blobbed along the length.
+  function drawCar(c, x, y, a, scale){
+    c.save();
+    c.translate(x, y);
+    c.rotate(a);
+    c.scale(scale, scale);
+
+    const L = 108, Wd = 54;                       // length, width
+
+    c.fillStyle = "rgba(0,0,0,.30)";
+    c.beginPath(); c.ellipse(0, 0, L * 0.54, Wd * 0.56, 0, 0, 7); c.fill();
+
+    // wheels first, so they read as sticking out past the bodywork
+    c.fillStyle = "#12161c";
+    for (const wx of [-L * 0.28, L * 0.30]) {
+      for (const wy of [-Wd * 0.56, Wd * 0.56]) {
+        c.beginPath(); c.roundRect(wx - 12, wy - 7, 24, 14, 5); c.fill();
+      }
+    }
+
+    // body
+    const paint = c.createLinearGradient(0, -Wd / 2, 0, Wd / 2);
+    paint.addColorStop(0, "#ffd071");
+    paint.addColorStop(.45, "#f5a524");
+    paint.addColorStop(1, "#b9760a");
+    c.fillStyle = paint;
+    c.beginPath(); c.roundRect(-L / 2, -Wd / 2 + 3, L, Wd - 6, 15); c.fill();
+
+    // bonnet and boot creases
+    c.strokeStyle = "rgba(0,0,0,.16)"; c.lineWidth = 1.6;
+    c.beginPath(); c.moveTo(L * 0.20, -Wd / 2 + 6); c.lineTo(L * 0.20, Wd / 2 - 6); c.stroke();
+    c.beginPath(); c.moveTo(-L * 0.30, -Wd / 2 + 6); c.lineTo(-L * 0.30, Wd / 2 - 6); c.stroke();
+
+    // cabin: a darker panel narrower than the body
+    c.fillStyle = "#0f1a24";
+    c.beginPath(); c.roundRect(-L * 0.30, -Wd * 0.36, L * 0.50, Wd * 0.72, 9); c.fill();
+
+    // windscreen (front) and rear screen, banded across the width
+    const glass = c.createLinearGradient(0, -Wd / 2, 0, Wd / 2);
+    glass.addColorStop(0, "#7fb2d9");
+    glass.addColorStop(.5, "#4a7fa8");
+    glass.addColorStop(1, "#2d5372");
+    c.fillStyle = glass;
+    c.beginPath();
+    c.moveTo(L * 0.19, -Wd * 0.31); c.lineTo(L * 0.19, Wd * 0.31);
+    c.lineTo(L * 0.10, Wd * 0.27);  c.lineTo(L * 0.10, -Wd * 0.27);
+    c.closePath(); c.fill();
+    c.beginPath();
+    c.moveTo(-L * 0.29, -Wd * 0.31); c.lineTo(-L * 0.29, Wd * 0.31);
+    c.lineTo(-L * 0.20, Wd * 0.27);  c.lineTo(-L * 0.20, -Wd * 0.27);
+    c.closePath(); c.fill();
+
+    // roof
+    c.fillStyle = "#e0952a";
+    c.beginPath(); c.roundRect(-L * 0.19, -Wd * 0.30, L * 0.28, Wd * 0.60, 6); c.fill();
+
+    // mirrors
+    c.fillStyle = "#c98a1c";
+    c.beginPath(); c.roundRect(L * 0.13, -Wd * 0.60, 9, 6, 2); c.fill();
+    c.beginPath(); c.roundRect(L * 0.13, Wd * 0.60 - 6, 9, 6, 2); c.fill();
+
+    // lamps
+    c.fillStyle = "#fff4d2";
+    c.beginPath(); c.roundRect(L * 0.45, -Wd * 0.34, 7, 12, 3); c.fill();
+    c.beginPath(); c.roundRect(L * 0.45, Wd * 0.34 - 12, 7, 12, 3); c.fill();
+    c.fillStyle = "#ff5d5d";
+    c.beginPath(); c.roundRect(-L / 2 - 1, -Wd * 0.32, 6, 10, 2); c.fill();
+    c.beginPath(); c.roundRect(-L / 2 - 1, Wd * 0.32 - 10, 6, 10, 2); c.fill();
+
+    c.restore();
+  }
+
+  function drawWorld(c, scale, ox, oy, withUi){
+    c.save();
+    c.translate(ox, oy);
+    c.scale(scale, scale);
+
+    c.fillStyle = "#101822";
+    c.fillRect(0, 0, W, H);
+
+    // lane grid, faint
+    c.strokeStyle = "rgba(255,255,255,.045)";
+    c.lineWidth = 2;
+    for (let x = 0; x <= W; x += 50) { c.beginPath(); c.moveTo(x,0); c.lineTo(x,H); c.stroke(); }
+    for (let y = 0; y <= H; y += 50) { c.beginPath(); c.moveTo(0,y); c.lineTo(W,y); c.stroke(); }
+
+    for (const b of BAYS) {
+      const active = dwell && dwell.id === b.id;
+      const p = active ? Math.min(1, dwell.t / 0.85) : 0;
+
+      c.fillStyle = active ? "rgba(245,165,36,.13)" : "rgba(255,255,255,.028)";
+      c.beginPath(); c.roundRect(b.x, b.y, b.w, b.h, 14); c.fill();
+
+      c.strokeStyle = active ? "#f5a524" : "rgba(255,255,255,.22)";
+      c.lineWidth = 3;
+      c.setLineDash(active ? [] : [12, 9]);
+      c.beginPath(); c.roundRect(b.x, b.y, b.w, b.h, 14); c.stroke();
+      c.setLineDash([]);
+
+      if (withUi) {
+        c.textAlign = "center";
+        c.fillStyle = active ? "#f5a524" : "rgba(231,236,244,.9)";
+        c.font = "700 30px Inter, system-ui, sans-serif";
+        c.fillText(b.label, b.x + b.w / 2, b.y + b.h / 2 + 2);
+        c.fillStyle = "rgba(231,236,244,.42)";
+        c.font = "500 14px Inter, system-ui, sans-serif";
+        c.fillText(b.sub, b.x + b.w / 2, b.y + b.h / 2 + 26);
+
+        if (p > 0) {
+          c.strokeStyle = "#f5a524"; c.lineWidth = 5; c.lineCap = "round";
+          c.beginPath();
+          c.arc(b.x + b.w / 2, b.y + 26, 13, -Math.PI/2, -Math.PI/2 + p * Math.PI * 2);
+          c.stroke(); c.lineCap = "butt";
+        }
+      }
+    }
+
+    drawCar(c, car.x, car.y, car.a, 1);
+    c.restore();
+  }
+
+  function fit(){
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    const r = cv.getBoundingClientRect();
+    cv.width = Math.round(r.width * dpr);
+    cv.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const s = Math.min(r.width / W, r.height / H) * 0.94;
+    view = { s, ox: (r.width - W * s) / 2, oy: (r.height - H * s) / 2, w: r.width, h: r.height };
+  }
+  addEventListener("resize", fit);
+
+  function frame(ts){
+    if (done) return;
+    const dt = Math.min(0.05, (ts - last) / 1000 || 0);
+    last = ts;
+    step(dt);
+    ctx.clearRect(0, 0, view.w || 0, view.h || 0);
+    drawWorld(ctx, view.s, view.ox, view.oy, true);
+    raf = requestAnimationFrame(frame);
+  }
+
+  /* ---------- the detector's opinion ---------- */
+  // Rendered at the scale that gave the model its best shot in testing; the
+  // point is a fair reading of the scene, not a rigged one.
+  const shot = document.createElement("canvas");
+  shot.width = 720; shot.height = 450;
+  const shotCtx = shot.getContext("2d");
+  let probing = false;
+
+  async function probe(){
+    if (done || probing || !window.fetch) return;
+    probing = true;
+    try {
+      const s = 1.15;
+      shotCtx.fillStyle = "#101822";
+      shotCtx.fillRect(0, 0, shot.width, shot.height);
+      drawWorld(shotCtx, s, shot.width / 2 - car.x * s, shot.height / 2 - car.y * s, false);
+
+      const blob = await new Promise(r => shot.toBlob(r, "image/jpeg", 0.9));
+      if (!blob) return;
+      const fd = new FormData();
+      fd.append("file", blob, "scene.jpg");
+      fd.append("conf", "0.10");
+      fd.append("annotate", "false");
+      fd.append("night_mode", "off");
+
+      const res = await fetch("/api/detect", { method: "POST", body: fd });
+      if (!res.ok) return;
+      const data = await res.json();
+      renderGap(data);
+    } catch (e) {
+      /* the panel is a flourish; never let it break the landing screen */
+    } finally {
+      probing = false;
+    }
+  }
+
+  function renderGap(data){
+    gapCv.width = shot.width; gapCv.height = shot.height;
+    gapCtx.drawImage(shot, 0, 0);
+    const top = data.detections && data.detections[0];
+
+    if (top) {
+      const rgb = COLORS[top.class_name] || "245,165,36";
+      gapCtx.strokeStyle = "rgb(" + rgb + ")";
+      gapCtx.lineWidth = 4;
+      gapCtx.strokeRect(top.x1, top.y1, top.x2 - top.x1, top.y2 - top.y1);
+      gapCtx.fillStyle = "rgb(" + rgb + ")";
+      gapCtx.font = "600 22px Inter, system-ui, sans-serif";
+      const label = top.class_name + " " + Math.round(top.confidence * 100) + "%";
+      const tw = gapCtx.measureText(label).width;
+      gapCtx.fillRect(top.x1, Math.max(0, top.y1 - 30), tw + 16, 30);
+      gapCtx.fillStyle = "#0b0f16";
+      gapCtx.fillText(label, top.x1 + 8, Math.max(22, top.y1 - 8));
+    }
+
+    $("gapVerdict").innerHTML = top
+      ? 'sees <b>' + esc(top.class_name) + '</b> ' +
+        Math.round(top.confidence * 100) + '%'
+      : '<span class="miss">sees nothing at all</span>';
+  }
+
+  /* ---------- lifecycle ---------- */
+  function finish(mode){
+    if (done) return;
+    done = true;
+    cancelAnimationFrame(raf);
+    clearInterval(probeTimer);
+    try { localStorage.setItem(SEEN, "1"); } catch (e) {}
+    root.classList.add("hidden");
+    if (mode) setMode(mode);
+  }
+
+  let probeTimer = 0;
+
+  function start(){
+    done = false;
+    car.x = W / 2; car.y = 250; car.a = Math.PI / 2; car.v = 0;
+    dwell = null;
+    root.classList.remove("hidden");
+    fit();
+    last = performance.now();
+    raf = requestAnimationFrame(frame);
+    probe();
+    probeTimer = setInterval(probe, 2600);
+  }
+
+  $("garageSkip").addEventListener("click", () => finish(null));
+  $("replayGarage").addEventListener("click", start);
+
+  let seen = false;
+  try { seen = localStorage.getItem(SEEN) === "1"; } catch (e) {}
+  if (seen) { root.classList.add("hidden"); done = true; } else { start(); }
+})();
+
 </script>
 </body>
 </html>
