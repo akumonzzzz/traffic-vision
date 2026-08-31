@@ -16,7 +16,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from ultralytics import YOLO
 
-from . import config
+from . import config, enhance
 
 log = logging.getLogger(__name__)
 
@@ -104,10 +104,22 @@ class TrafficDetector:
         conf: float = config.DEFAULT_CONF,
         iou: float = config.DEFAULT_IOU,
         classes: Iterable[int] | None = None,
-    ) -> tuple[list[Detection], Image.Image, float]:
-        """Run detection. Returns (detections, original RGB image, latency_ms)."""
+        night_mode: str | None = None,
+    ) -> tuple[list[Detection], Image.Image, float, bool]:
+        """Run detection.
+
+        Returns (detections, original RGB image, latency_ms, enhanced).
+        The image returned is the *original*, not the enhanced one -- the boost
+        exists to help the detector, not to change what the user sees.
+        """
         image = self._decode(image_bytes)
         frame = np.array(image)[:, :, ::-1]  # RGB -> BGR for ultralytics
+
+        frame, enhanced = enhance.maybe_enhance(
+            frame,
+            mode=night_mode or config.NIGHT_MODE,
+            threshold=config.NIGHT_THRESHOLD,
+        )
 
         wanted = sorted(set(classes)) if classes else self.traffic_class_ids
 
@@ -143,7 +155,7 @@ class TrafficDetector:
                 )
 
         detections.sort(key=lambda d: d.confidence, reverse=True)
-        return detections, image, latency_ms
+        return detections, image, latency_ms, enhanced
 
     def _decode(self, image_bytes: bytes) -> Image.Image:
         """Bytes -> RGB PIL image, rejecting anything that is not an image."""

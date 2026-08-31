@@ -149,6 +149,8 @@ def health():
         "device": config.DEVICE,
         "image_size": config.IMAGE_SIZE,
         "classes": len(detector.names) if detector else 0,
+        "night_mode": config.NIGHT_MODE,
+        "tracker": config.TRACKER,
         "live_sessions": {"active": _live_active, "max": config.MAX_LIVE_SESSIONS},
         "jobs": state["jobs"].stats() if state.get("jobs") else None,
     }
@@ -167,6 +169,8 @@ async def detect(
     iou: float = Form(config.DEFAULT_IOU, ge=0.0, le=1.0),
     classes: str | None = Form(None, description="Comma-separated class ids to keep"),
     annotate: bool = Form(True, description="Include a base64 annotated JPEG"),
+    night_mode: str = Form("auto", pattern="^(auto|on|off)$",
+                           description="Low-light boost: auto, on, or off"),
 ):
     """Detect traffic objects and return boxes, per-class counts and latency."""
     detector = get_detector()
@@ -181,8 +185,8 @@ async def detect(
     wanted = _parse_classes(classes, detector)
 
     try:
-        detections, image, latency_ms = detector.predict(
-            payload, conf=conf, iou=iou, classes=wanted
+        detections, image, latency_ms, enhanced = detector.predict(
+            payload, conf=conf, iou=iou, classes=wanted, night_mode=night_mode
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -194,6 +198,7 @@ async def detect(
         "image": {"width": image.width, "height": image.height},
         "inference_ms": round(latency_ms, 1),
         "model": config.MODEL_PATH,
+        "low_light_boost": enhanced,
     }
 
     if annotate:
@@ -226,7 +231,9 @@ async def detect_image(
     wanted = _parse_classes(classes, detector)
 
     try:
-        detections, image, _ = detector.predict(payload, conf=conf, iou=iou, classes=wanted)
+        detections, image, _, _ = detector.predict(
+            payload, conf=conf, iou=iou, classes=wanted
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -243,7 +250,8 @@ async def detect_image(
 # ---------------------------------------------------------------------------
 
 
-def _run_video_job(job_id: str, src, dst, classes, conf, iou, stride, line):
+def _run_video_job(job_id: str, src, dst, classes, conf, iou, stride, line,
+                   tracker=None, night_mode=None):
     """Executed on a worker thread; owns the job's lifecycle end to end."""
     jobs = state.get("jobs")
     detector = state.get("detector")
@@ -256,7 +264,7 @@ def _run_video_job(job_id: str, src, dst, classes, conf, iou, stride, line):
             detector, src, dst,
             classes=classes, conf=conf, iou=iou, stride=stride,
             max_frames=config.VIDEO_MAX_FRAMES,
-            line=line,
+            line=line, tracker=tracker, night_mode=night_mode,
             on_progress=lambda done, total: jobs.set_progress(job_id, done, total),
         )
         jobs.update(
@@ -293,6 +301,8 @@ async def submit_video(
     classes: str | None = Form(None),
     stride: int = Form(1, ge=1, le=10, description="Process every Nth frame"),
     line_y: float = Form(0.5, ge=0.0, le=1.0, description="Counting line height, 0-1"),
+    tracker: str = Form("bytetrack.yaml", pattern=r"^(bytetrack|botsort)\.yaml$"),
+    night_mode: str = Form("auto", pattern="^(auto|on|off)$"),
 ):
     """Queue a clip for tracking. Returns a job id to poll.
 
@@ -338,6 +348,7 @@ async def submit_video(
     line = ((0.0, line_y), (1.0, line_y))
     background.add_task(
         _submit_to_pool, job.id, src, dst, wanted, conf, iou, stride, line,
+        tracker, night_mode,
     )
 
     body = job.to_dict()
@@ -452,6 +463,8 @@ async def live_stream(ws: WebSocket):
                 if cfg.get("classes") is not None:
                     valid = [int(i) for i in cfg["classes"] if int(i) in detector.names]
                     stream.classes = valid or detector.traffic_class_ids
+                if cfg.get("night_mode") in {"auto", "on", "off"}:
+                    stream.night_mode = cfg["night_mode"]
                 if cfg.get("line_y") is not None:
                     y = float(cfg["line_y"])
                     stream.counter = video.LineCounter((0.0, y), (1.0, y))
@@ -501,6 +514,7 @@ async def live_stream(ws: WebSocket):
                 "counts": summarize_names([t.class_name for t in tracks]),
                 "line": stream.counter.as_dict(),
                 "unique_total": len(stream.seen_ids),
+                "low_light_boost": stream.enhanced_frames > 0,
                 "inference_ms": round(latency_ms, 1),
             })
     except WebSocketDisconnect:

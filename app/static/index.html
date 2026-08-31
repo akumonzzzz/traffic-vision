@@ -126,6 +126,17 @@ input[type=range]::-moz-range-thumb{
 input[type=range]:focus-visible{box-shadow:0 0 0 3px #f5a52433}
 .hintline{font-size:11px;color:var(--dim);margin-top:6px;line-height:1.45}
 
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:3px;
+  background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:3px}
+.seg button{
+  padding:7px 4px;border:0;border-radius:6px;background:none;cursor:pointer;
+  font-family:var(--sans);font-size:12px;font-weight:600;color:var(--muted);
+  transition:.14s;width:auto;margin:0;
+}
+.seg button:hover{color:var(--text)}
+.seg button[aria-pressed="true"]{background:var(--amber-dim);color:var(--amber)}
+.pill.boost{border-color:#f5a5244d;background:var(--amber-dim);color:var(--amber)}
+
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{
   display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;
@@ -291,6 +302,27 @@ footer a:hover{color:var(--amber);border-color:var(--amber)}
         <input type="range" id="iou" min="0.10" max="0.90" step="0.05" value="0.45">
       </div>
 
+      <div class="field">
+        <div class="field-h"><label>Low-light boost</label></div>
+        <div class="seg" id="nightSeg" role="group" aria-label="Low-light boost">
+          <button type="button" data-night="auto" aria-pressed="true">Auto</button>
+          <button type="button" data-night="on" aria-pressed="false">On</button>
+          <button type="button" data-night="off" aria-pressed="false">Off</button>
+        </div>
+        <p class="hintline">Brightens dark frames before detection so night footage
+        still registers. The picture you see is unchanged.</p>
+      </div>
+
+      <div class="field" id="trackerField">
+        <div class="field-h"><label>Tracker</label></div>
+        <div class="seg" id="trackerSeg" role="group" aria-label="Tracker">
+          <button type="button" data-tracker="bytetrack.yaml" aria-pressed="true">ByteTrack</button>
+          <button type="button" data-tracker="botsort.yaml" aria-pressed="false">BoT-SORT</button>
+        </div>
+        <p class="hintline">BoT-SORT compensates for motion between frames — use it
+        when fast vehicles get a new ID each frame. Slower.</p>
+      </div>
+
       <div class="field" id="lineField">
         <div class="field-h"><label for="lineY">Counting line</label><output id="lineOut">0.50</output></div>
         <input type="range" id="lineY" min="0.05" max="0.95" step="0.05" value="0.50">
@@ -447,6 +479,21 @@ let CLASSES = [];
 /* =======================================================================
    shared helpers
    ======================================================================= */
+let nightMode = "auto";
+let trackerName = "bytetrack.yaml";
+
+function wireSegment(id, attr, onPick){
+  const box = document.getElementById(id);
+  box.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-" + attr + "]");
+    if (!btn) return;
+    for (const b of box.querySelectorAll("button")) {
+      b.setAttribute("aria-pressed", String(b === btn));
+    }
+    onPick(btn.dataset[attr]);
+  });
+}
+
 function selectedClassIds(){
   return [...document.querySelectorAll("#chips input:checked")].map(i => i.value);
 }
@@ -532,6 +579,7 @@ function setMode(mode){
   }
   // The counting line is meaningless for a single frame.
   $("lineField").classList.toggle("hidden", mode === "image");
+  $("trackerField").classList.toggle("hidden", mode === "image");
   if (mode !== "live") stopLive();
 }
 
@@ -606,6 +654,7 @@ $("imgRun").addEventListener("click", async () => {
   form.append("iou", $("iou").value);
   form.append("classes", classes.join(","));
   form.append("annotate", "true");
+  form.append("night_mode", nightMode);
 
   try {
     const res = await fetch("/api/detect", { method: "POST", body: form });
@@ -616,7 +665,9 @@ $("imgRun").addEventListener("click", async () => {
     $("imgStage").innerHTML = '<img alt="Detection result">';
     $("imgStage").querySelector("img").src = data.annotated_image;
     $("imgLatency").style.display = "";
-    $("imgLatency").innerHTML = '<b>' + data.inference_ms + '</b> ms';
+    $("imgLatency").className = data.low_light_boost ? "pill boost" : "pill";
+    $("imgLatency").innerHTML = (data.low_light_boost ? "low-light · " : "") +
+      '<b>' + data.inference_ms + '</b> ms';
 
     const raw = JSON.stringify({ ...data, annotated_image: "<base64 jpeg omitted>" }, null, 2);
     $("imgOut").innerHTML =
@@ -685,6 +736,8 @@ $("vidRun").addEventListener("click", async () => {
   form.append("classes", classes.join(","));
   form.append("stride", $("stride").value);
   form.append("line_y", $("lineY").value);
+  form.append("night_mode", nightMode);
+  form.append("tracker", trackerName);
 
   try {
     const res = await fetch("/api/video", { method: "POST", body: form });
@@ -770,6 +823,7 @@ function pushLiveConfig(){
     iou: parseFloat($("iou").value),
     line_y: parseFloat($("lineY").value),
     classes: selectedClassIds().map(Number),
+    night_mode: nightMode,
   }));
 }
 
@@ -989,6 +1043,9 @@ function stopLive(){
   setLivePill("off", "offline");
   lastTracks = [];
 }
+
+wireSegment("nightSeg", "night", (v) => { nightMode = v; pushLiveConfig(); });
+wireSegment("trackerSeg", "tracker", (v) => { trackerName = v; });
 
 window.addEventListener("beforeunload", stopLive);
 

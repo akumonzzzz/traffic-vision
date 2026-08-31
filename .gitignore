@@ -29,6 +29,11 @@ settings.json
 yolo*.pt
 sam*.pt
 
+# --- Scratch output from local experiments ---
+night_*.png
+*_annotated.jpg
+*_compare.png
+
 # --- OS / editor ---
 .DS_Store
 Thumbs.db

@@ -19,7 +19,7 @@ import cv2
 import imageio_ffmpeg
 import numpy as np
 
-from . import config
+from . import config, enhance
 
 log = logging.getLogger(__name__)
 
@@ -131,13 +131,15 @@ class TrackedStream:
 
     def __init__(self, detector, classes: list[int] | None = None,
                  conf: float = config.DEFAULT_CONF, iou: float = config.DEFAULT_IOU,
-                 tracker: str = "bytetrack.yaml"):
+                 tracker: str | None = None, night_mode: str | None = None):
         self.detector = detector
         self.model = detector.new_tracking_model()
         self.classes = classes or detector.traffic_class_ids
         self.conf = conf
         self.iou = iou
-        self.tracker = tracker
+        self.tracker = tracker or config.TRACKER
+        self.night_mode = night_mode or config.NIGHT_MODE
+        self.enhanced_frames = 0
         self.counter = LineCounter()
         # Recent centroids per id, for motion trails.
         self.trails: dict[int, deque] = defaultdict(lambda: deque(maxlen=24))
@@ -145,8 +147,17 @@ class TrackedStream:
         self.class_of_id: dict[int, str] = {}
 
     def process(self, frame_bgr: np.ndarray) -> list[Track]:
+        # Enhance for the detector only. Everything downstream -- overlays,
+        # encoded video, the counting line -- uses the untouched frame, so the
+        # viewer sees the real scene rather than a brightened one.
+        detect_on, was_enhanced = enhance.maybe_enhance(
+            frame_bgr, mode=self.night_mode, threshold=config.NIGHT_THRESHOLD
+        )
+        if was_enhanced:
+            self.enhanced_frames += 1
+
         results = self.model.track(
-            frame_bgr,
+            detect_on,
             persist=True,
             tracker=self.tracker,
             classes=self.classes,
@@ -246,6 +257,7 @@ class VideoStats:
     width: int = 0
     height: int = 0
     unique_objects: dict[str, int] = field(default_factory=dict)
+    enhanced_frames: int = 0
     counts: dict = field(default_factory=dict)
     peak_concurrent: int = 0
 
@@ -340,6 +352,8 @@ def process_video(
     stride: int = 1,
     max_frames: int | None = None,
     line: tuple[tuple[float, float], tuple[float, float]] | None = None,
+    tracker: str | None = None,
+    night_mode: str | None = None,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> VideoStats:
     """Track through a video and write an annotated H.264 MP4 to ``dst``."""
@@ -351,7 +365,8 @@ def process_video(
     ratio = target_w / width if width else 1.0
     out_w, out_h = int(width * ratio), int(height * ratio)
 
-    stream = TrackedStream(detector, classes=classes, conf=conf, iou=iou)
+    stream = TrackedStream(detector, classes=classes, conf=conf, iou=iou,
+                           tracker=tracker, night_mode=night_mode)
     if line:
         stream.counter = LineCounter(line[0], line[1])
 
@@ -388,6 +403,7 @@ def process_video(
         width=out_w,
         height=out_h,
         unique_objects=stream.unique_totals(),
+        enhanced_frames=stream.enhanced_frames,
         counts=stream.counter.as_dict(),
         peak_concurrent=peak,
     )

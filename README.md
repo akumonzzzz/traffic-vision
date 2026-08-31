@@ -57,6 +57,7 @@ python scripts/stream.py --source "rtsp://user:pass@10.0.0.20:554/stream1" --csv
 | | |
 |---|---|
 | **Model** | Ultralytics YOLO11n (COCO-pretrained, filtered to traffic classes) |
+| **Classes** | person, bicycle, car, motorcycle, bus, truck, train, traffic light, stop sign |
 | **Tracker** | ByteTrack, one isolated instance per session |
 | **Image inference** | ~70–90 ms, CPU-only, 640 px |
 | **Video throughput** | ~17 fps, CPU-only, 960 px |
@@ -189,6 +190,10 @@ Every setting is an environment variable; swapping models needs no code change.
 | `VIDEO_JOB_TTL_S` | `1800` | How long results are kept before cleanup |
 | `MAX_LIVE_SESSIONS` | `4` | Concurrent websocket streams |
 | `LIVE_MAX_WIDTH` | `960` | Live frames downscaled to this |
+| `NIGHT_MODE` | `auto` | Low-light boost: `auto`, `on`, `off` |
+| `NIGHT_GAMMA` | `0.6` | Brightening curve; lower is stronger |
+| `NIGHT_CLAHE` | `0` | Local contrast. Off by default — it *cost* detections when measured |
+| `TRACKER` | `bytetrack.yaml` | `botsort.yaml` handles fast motion better, slower |
 
 ---
 
@@ -278,6 +283,18 @@ Stated plainly, because they are the honest state of the project:
   and is counted twice.
 - **CPU inference.** Fine for images and short clips. Live streaming holds
   ~12–15 fps per session; real-time HD video needs a GPU.
+- **Night performance is improved, not solved.** A gamma boost before inference
+  recovers a meaningful share of lost detections (7 → 9 on a simulated dark
+  frame), but COCO is a daytime dataset and the underlying weights have never
+  seen a night road. Only fine-tuning fixes that properly.
+- **Rail transport is heavy rail only.** COCO has a `train` class, now enabled,
+  but no class for trams, light rail or on-street metro — those are typically
+  misread as `bus`. Cityscapes and Mapillary Vistas both carry an on-rails class
+  and are the datasets to fine-tune on.
+- **Very fast objects still break tracking.** When a vehicle moves further
+  between frames than its own box width, IoU association fails and it is issued a
+  new ID, which double-counts it. `TRACKER=botsort.yaml` compensates for motion
+  and helps; a higher frame rate helps more.
 
 ---
 

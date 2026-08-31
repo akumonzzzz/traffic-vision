@@ -33,6 +33,18 @@ JOB_DIR = Path(os.getenv("JOB_DIR", tempfile.gettempdir())) / "traffic-detector-
 LIVE_MAX_WIDTH = int(os.getenv("LIVE_MAX_WIDTH", "960"))
 LIVE_MAX_FRAME_BYTES = int(os.getenv("LIVE_MAX_FRAME_BYTES", str(3 * 1024 * 1024)))
 
+# Low-light handling. "auto" enhances only frames darker than NIGHT_THRESHOLD;
+# "on" always, "off" never. See app/enhance.py for why CLAHE is off by default.
+NIGHT_MODE = os.getenv("NIGHT_MODE", "auto")
+NIGHT_THRESHOLD = float(os.getenv("NIGHT_THRESHOLD", "75"))
+NIGHT_GAMMA = float(os.getenv("NIGHT_GAMMA", "0.6"))
+NIGHT_CLAHE = float(os.getenv("NIGHT_CLAHE", "0"))
+
+# Tracker backend. bytetrack is fastest; botsort adds global motion compensation,
+# which is what recovers identities when objects move far between frames -- fast
+# traffic at a low frame rate, or a camera that is not perfectly still.
+TRACKER = os.getenv("TRACKER", "bytetrack.yaml")
+
 # Each live session holds its own model instance for tracker isolation, so
 # concurrent viewers must be bounded or memory grows without limit.
 MAX_LIVE_SESSIONS = int(os.getenv("MAX_LIVE_SESSIONS", "4"))
@@ -47,6 +59,7 @@ TRAFFIC_CLASS_NAMES = (
     "motorcycle",
     "bus",
     "truck",
+    "train",
     "traffic light",
     "stop sign",
 )
@@ -54,6 +67,7 @@ TRAFFIC_CLASS_NAMES = (
 # Stable colour per class so the same vehicle type is always the same colour.
 CLASS_COLORS = {
     "person": (239, 68, 68),
+    "train": (139, 92, 246),
     "bicycle": (168, 85, 247),
     "car": (34, 197, 94),
     "motorcycle": (249, 115, 22),
