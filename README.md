@@ -253,6 +253,9 @@ The served model is COCO-pretrained. To fine-tune:
 `scripts/autolabel_sam.py` turns one click per object into a bounding box via
 SAM 2.1. See [docs/DATASET.md](docs/DATASET.md) for layout rules and sanity checks.
 
+For how the pieces fit together, how to change them, and how to deploy a change,
+see the [development guide](docs/DEVELOPMENT.md).
+
 ---
 
 ## Known limitations
