@@ -67,6 +67,51 @@ python scripts/stream.py --source "rtsp://user:pass@10.0.0.20:554/stream1" --csv
 
 ---
 
+## Accuracy
+
+Speed without accuracy says nothing about whether the boxes are right, so the
+served weights are measured, not assumed. `scripts/evaluate.py` scores whatever
+`MODEL_PATH` points at, restricted to the classes this service actually serves:
+
+```bash
+python scripts/evaluate.py                                  # your own dataset
+python scripts/evaluate.py --data coco128.yaml --split train   # public smoke test
+```
+
+Stock `yolo11n.pt`, 640 px, `conf=0.001`, `iou=0.45`, CPU:
+
+| Class | Instances | P | R | mAP50 | mAP50-95 |
+|---|--:|--:|--:|--:|--:|
+| person | 254 | 0.873 | 0.651 | 0.801 | 0.533 |
+| bicycle | 6 | 0.403 | 0.167 | 0.461 | 0.255 |
+| car | 46 | 0.743 | 0.174 | 0.241 | 0.149 |
+| motorcycle | 5 | 0.769 | 1.000 | 0.995 | 0.787 |
+| bus | 7 | 0.840 | 0.714 | 0.724 | 0.649 |
+| train | 3 | 1.000 | 0.966 | 0.995 | 0.885 |
+| truck | 12 | 0.597 | 0.250 | 0.390 | 0.225 |
+| traffic light | 14 | 0.521 | 0.143 | 0.178 | 0.137 |
+| stop sign | 2 | 0.839 | 1.000 | 0.995 | 0.795 |
+| **All** | **349** | **0.732** | **0.563** | **0.642** | **0.491** |
+
+**What this measures, and what it does not.** These figures come from
+`coco128` — 128 general COCO photos, not road scenes — because no labelled
+traffic set ships with this repo. They describe the stock weights on COCO's
+distribution and are a floor, not a claim about camera footage. Several classes
+carry only a handful of instances, which is far too few to be stable: `stop sign`
+scoring 0.995 on two instances means almost nothing.
+
+**The result worth acting on** is `car`: recall 0.17 and mAP50 0.24, the weakest
+of the vehicle classes and by far the most important one here. `traffic light` is
+similar at 0.18. Both are dominated by small, distant instances, which is exactly
+where the nano model gives up capacity for speed. That points at three concrete
+experiments — raise `imgsz`, move to `yolo11s`, or fine-tune on road data — and
+the point of having this script is that each can now be measured rather than argued.
+
+Replacing these numbers with ones from real traffic footage is the single highest-value
+change to this repo. See [docs/DATASET.md](docs/DATASET.md).
+
+---
+
 ## Quick start
 
 ### Docker
@@ -211,6 +256,7 @@ scripts/
   stream.py        headless RTSP / webcam / file runner
   autolabel_sam.py SAM 2.1 point-prompts → YOLO labels
   train.py         fine-tuning entry point
+  evaluate.py      mAP / precision / recall for the served weights
 tests/             45 tests: API contracts, tracking, counting, encoding
 ```
 
