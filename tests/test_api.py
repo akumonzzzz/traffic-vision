@@ -120,3 +120,28 @@ def test_api_responses_are_not_given_a_stale_cache_policy(client):
     """The middleware must not attach asset caching to live API data."""
     res = client.get("/api/health")
     assert "max-age" not in res.headers.get("cache-control", "")
+
+
+def test_detector_warms_up_by_default():
+    """Regression: without a warm-up pass the first real request paid ~4 s of
+    lazy torch init. Loading the weights alone does not trigger it."""
+    import time
+
+    from app.detector import TrafficDetector
+
+    warm = TrafficDetector(warmup=True)
+    with open("app/static/samples/traffic2.jpg", "rb") as fh:
+        payload = fh.read()
+
+    started = time.perf_counter()
+    warm.predict(payload)
+    first_ms = (time.perf_counter() - started) * 1000
+
+    # Generous bound: the point is that it is not several seconds.
+    assert first_ms < 1500, f"first request took {first_ms:.0f} ms; warm-up not working"
+
+
+def test_warmup_can_be_disabled():
+    from app.detector import TrafficDetector
+
+    assert TrafficDetector(warmup=False).names

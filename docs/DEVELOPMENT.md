@@ -41,7 +41,7 @@ installations are built on. Everything else is plumbing around those two ideas.
 | `app/static/index.html` | The browser console — one file, no build step |
 | `scripts/stream.py` | Headless runner for a real RTSP camera |
 | `scripts/train.py` | Fine-tuning entry point |
-| `tests/` | 45 tests |
+| `tests/` | 64 tests |
 
 ### The three modes
 

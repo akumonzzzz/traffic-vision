@@ -257,7 +257,7 @@ scripts/
   autolabel_sam.py SAM 2.1 point-prompts → YOLO labels
   train.py         fine-tuning entry point
   evaluate.py      mAP / precision / recall for the served weights
-tests/             45 tests: API contracts, tracking, counting, encoding
+tests/             64 tests: API contracts, tracking, counting, encoding
 ```
 
 ---

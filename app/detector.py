@@ -51,15 +51,36 @@ class Detection:
 class TrafficDetector:
     """Loads the model once and serves predictions."""
 
-    def __init__(self, model_path: str = config.MODEL_PATH, device: str = config.DEVICE):
+    def __init__(self, model_path: str = config.MODEL_PATH, device: str = config.DEVICE,
+                 warmup: bool = True):
         self.model_path = model_path
         self.device = device
         log.info("Loading model %s on %s", model_path, device)
         self.model = YOLO(model_path)
         self.names: dict[int, str] = {int(k): v for k, v in self.model.names.items()}
         self.traffic_class_ids = self._resolve_traffic_ids()
+        if warmup:
+            self._warmup()
         log.info("Model ready: %d classes, %d kept as traffic classes",
                  len(self.names), len(self.traffic_class_ids))
+
+    def _warmup(self) -> None:
+        """Run one throwaway inference so the first real request is not the slow one.
+
+        Loading the weights is not enough: torch defers a lot of setup -- kernel
+        selection, thread-pool spin-up, lazy module init -- until an actual
+        forward pass. Measured on the deployed Space, the first detection took
+        4.5 s against ~1 s once warm. That cost lands on whoever opens the demo
+        first, which is exactly the visitor you least want to keep waiting.
+        """
+        try:
+            started = time.perf_counter()
+            blank = np.zeros((config.IMAGE_SIZE, config.IMAGE_SIZE, 3), dtype=np.uint8)
+            self.model.predict(blank, imgsz=config.IMAGE_SIZE, device=self.device,
+                               verbose=False)
+            log.info("Warm-up pass in %.0f ms", (time.perf_counter() - started) * 1000)
+        except Exception:  # noqa: BLE001 - a slow first request beats no service
+            log.warning("Warm-up failed; first request will pay the cost", exc_info=True)
 
     def _resolve_traffic_ids(self) -> list[int]:
         """Map the configured traffic class names onto this model's label set.
