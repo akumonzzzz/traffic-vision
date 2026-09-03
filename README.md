@@ -56,10 +56,10 @@ python scripts/stream.py --source "rtsp://user:pass@10.0.0.20:554/stream1" --csv
 
 | | |
 |---|---|
-| **Model** | Ultralytics YOLO11n (COCO-pretrained, filtered to traffic classes) |
+| **Model** | Ultralytics YOLO11s (COCO-pretrained, filtered to traffic classes) |
 | **Classes** | person, bicycle, car, motorcycle, bus, truck, train, traffic light, stop sign |
 | **Tracker** | ByteTrack, one isolated instance per session |
-| **Image inference** | ~70–90 ms, CPU-only, 640 px |
+| **Image inference** | ~93 ms median, CPU-only, 640 px |
 | **Video throughput** | ~17 fps, CPU-only, 960 px |
 | **Live throughput** | ~12–15 fps per session, two concurrent sessions |
 | **Serving** | FastAPI + Uvicorn, REST + WebSocket |
@@ -78,34 +78,56 @@ python scripts/evaluate.py                                  # your own dataset
 python scripts/evaluate.py --data coco128.yaml --split train   # public smoke test
 ```
 
-Stock `yolo11n.pt`, 640 px, `conf=0.001`, `iou=0.45`, CPU:
+Stock `yolo11s.pt`, 640 px, `conf=0.001`, `iou=0.45`, CPU:
 
 | Class | Instances | P | R | mAP50 | mAP50-95 |
 |---|--:|--:|--:|--:|--:|
-| person | 254 | 0.873 | 0.651 | 0.801 | 0.533 |
-| bicycle | 6 | 0.403 | 0.167 | 0.461 | 0.255 |
-| car | 46 | 0.743 | 0.174 | 0.241 | 0.149 |
-| motorcycle | 5 | 0.769 | 1.000 | 0.995 | 0.787 |
-| bus | 7 | 0.840 | 0.714 | 0.724 | 0.649 |
-| train | 3 | 1.000 | 0.966 | 0.995 | 0.885 |
-| truck | 12 | 0.597 | 0.250 | 0.390 | 0.225 |
-| traffic light | 14 | 0.521 | 0.143 | 0.178 | 0.137 |
-| stop sign | 2 | 0.839 | 1.000 | 0.995 | 0.795 |
-| **All** | **349** | **0.732** | **0.563** | **0.642** | **0.491** |
+| person | 254 | 0.868 | 0.699 | 0.824 | 0.586 |
+| bicycle | 6 | 0.552 | 0.333 | 0.386 | 0.314 |
+| car | 46 | 0.745 | 0.255 | 0.442 | 0.245 |
+| motorcycle | 5 | 0.773 | 1.000 | 0.962 | 0.765 |
+| bus | 7 | 0.902 | 0.714 | 0.766 | 0.700 |
+| train | 3 | 0.797 | 1.000 | 0.995 | 0.819 |
+| truck | 12 | 0.838 | 0.432 | 0.575 | 0.338 |
+| traffic light | 14 | 0.682 | 0.143 | 0.220 | 0.185 |
+| stop sign | 2 | 0.781 | 1.000 | 0.995 | 0.846 |
+| **All** | **349** | **0.771** | **0.620** | **0.685** | **0.533** |
+
+### Why `yolo11s` and not `yolo11n`
+
+The first measurement ran on `yolo11n` and put `car` recall at 0.17 — the weakest
+vehicle class and the most important one in a traffic detector. Rather than guess
+at a fix, all three candidate levers were measured against the same split:
+
+| Model | imgsz | car recall | car mAP50 | all mAP50 | latency |
+|---|--:|--:|--:|--:|--:|
+| yolo11n | 640 | 0.174 | 0.241 | 0.642 | 72 ms |
+| yolo11n | 1280 | 0.304 | 0.432 | 0.571 | 181 ms |
+| **yolo11s** | **640** | **0.255** | **0.442** | **0.685** | **93 ms** |
+| yolo11s | 1280 | 0.408 | 0.550 | 0.635 | 343 ms |
+
+`yolo11s` at 640 px wins on every accuracy measure for 21 ms and 14 MB. It is now
+the default.
+
+Two results in that table are worth reading carefully. Raising `imgsz` lifts `car`
+sharply but *drops* overall mAP50 — because `person` supplies 254 of the 349
+instances, so the "all" column is largely a person score, and upscaling past the
+images' native resolution hurts the classes that were already resolved. And
+`yolo11s` at 1280 has the best `car` recall of all, 0.408, but costs 3.7× the
+latency for it; that trade is available via `IMAGE_SIZE=1280` for anyone who wants
+recall over speed.
 
 **What this measures, and what it does not.** These figures come from
 `coco128` — 128 general COCO photos, not road scenes — because no labelled
-traffic set ships with this repo. They describe the stock weights on COCO's
+traffic set ships with this repo. They describe stock weights on COCO's
 distribution and are a floor, not a claim about camera footage. Several classes
-carry only a handful of instances, which is far too few to be stable: `stop sign`
-scoring 0.995 on two instances means almost nothing.
+carry only a handful of instances, far too few to be stable: `stop sign` scoring
+0.995 on two instances means almost nothing.
 
-**The result worth acting on** is `car`: recall 0.17 and mAP50 0.24, the weakest
-of the vehicle classes and by far the most important one here. `traffic light` is
-similar at 0.18. Both are dominated by small, distant instances, which is exactly
-where the nano model gives up capacity for speed. That points at three concrete
-experiments — raise `imgsz`, move to `yolo11s`, or fine-tune on road data — and
-the point of having this script is that each can now be measured rather than argued.
+`traffic light` remains weak at 0.143 recall, and `car` at 0.255 is still the
+ceiling-setter. Both are dominated by small, distant instances. Fine-tuning on
+real road data is the remaining lever, and the only one that would make these
+numbers describe traffic rather than COCO.
 
 Replacing these numbers with ones from real traffic footage is the single highest-value
 change to this repo. See [docs/DATASET.md](docs/DATASET.md).
@@ -154,7 +176,7 @@ curl -X POST http://localhost:7860/api/detect \
   ],
   "image": { "width": 1566, "height": 876 },
   "inference_ms": 91.7,
-  "model": "yolo11n.pt"
+  "model": "yolo11s.pt"
 }
 ```
 
@@ -223,7 +245,7 @@ Every setting is an environment variable; swapping models needs no code change.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `MODEL_PATH` | `yolo11n.pt` | Weights to serve — point at your own fine-tune |
+| `MODEL_PATH` | `yolo11s.pt` | Weights to serve — point at your own fine-tune |
 | `DEFAULT_CONF` / `DEFAULT_IOU` | `0.35` / `0.45` | Detection thresholds |
 | `IMAGE_SIZE` | `640` | Inference resolution |
 | `DEVICE` | `cpu` | `cpu`, or `0` for the first CUDA device |

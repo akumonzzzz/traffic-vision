@@ -174,7 +174,7 @@ def markdown_table(metrics, names: dict[int, str]) -> str:
         )
 
     lines.append(
-        f"| **Tổng** | | | **{box.mp:.3f}** | **{box.mr:.3f}** | "
+        f"| **All** | | | **{box.mp:.3f}** | **{box.mr:.3f}** | "
         f"**{box.map50:.3f}** | **{box.map:.3f}** |"
     )
     return "\n".join(lines)

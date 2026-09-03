@@ -202,7 +202,7 @@ Here it would merge Hugging Face's placeholder README into your history.
 
 ### The cheap upgrade
 
-`yolo11n` is the nano model — smallest and fastest. `yolo11s` or `yolo11m` catch
+`yolo11s` is the default. `yolo11n` is smaller and faster; `yolo11m` catches
 more distant vehicles at the cost of speed. No code change:
 
 ```bash
@@ -244,7 +244,7 @@ model's labels do not match COCO's names.
 ### Weights are not in git
 
 `.gitignore` excludes `*.pt` — model files are tens to hundreds of megabytes and
-GitHub rejects anything over 100 MB. The container downloads `yolo11n.pt` during
+GitHub rejects anything over 100 MB. The container downloads `yolo11s.pt` during
 its build. If you fine-tune, publish the weights as a Hugging Face model repo and
 have the app download them rather than committing them.
 

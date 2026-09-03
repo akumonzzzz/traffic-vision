@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PORT=7860 \
-    MODEL_PATH=yolo11n.pt \
+    MODEL_PATH=yolo11s.pt \
     DEVICE=cpu \
     # Ultralytics writes a settings file at import time; point it somewhere writable.
     YOLO_CONFIG_DIR=/home/appuser/.config/Ultralytics \

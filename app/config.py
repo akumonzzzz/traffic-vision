@@ -9,7 +9,7 @@ STATIC_DIR = APP_ROOT / "static"
 
 # Which weights to serve. Point this at your own fine-tuned .pt to swap models
 # without touching any other code:  MODEL_PATH=weights/traffic_yolo11s.pt
-MODEL_PATH = os.getenv("MODEL_PATH", "yolo11n.pt")
+MODEL_PATH = os.getenv("MODEL_PATH", "yolo11s.pt")
 
 # Inference defaults. The API accepts per-request overrides.
 DEFAULT_CONF = float(os.getenv("DEFAULT_CONF", "0.35"))
