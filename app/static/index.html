@@ -14,10 +14,10 @@
   --panel:#0f141d;
   --panel-2:#141a25;
   --line:#1e2632;
-  --line-2:#2a3444;
+  --line-2:#5a6474;
   --text:#e7ecf4;
-  --muted:#7b8698;
-  --dim:#4d5766;
+  --muted:#9aa4b5;
+  --dim:#7b8698;
   --amber:#f5a524;
   --amber-dim:#f5a52422;
   --green:#21d07a;
@@ -264,6 +264,44 @@ footer{text-align:center;color:var(--dim);font-size:12px;padding:0 22px 40px}
 footer a{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--line-2)}
 footer a:hover{color:var(--amber);border-color:var(--amber)}
 :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+/* Motion is decorative here -- the live pill pulses and the spinner turns, but
+   neither carries information the text does not already give. Vestibular
+   sensitivity makes infinite loops genuinely unpleasant, so honour the OS
+   preference and hold the final state instead of animating to it. */
+/* Touch targets. The design brief calls for a dense dashboard, which is right
+   with a mouse and wrong with a thumb -- measured on a 390px viewport the class
+   chips were 29px tall, "Clear all" 13px, and the sliders' hit area was the 4px
+   visual track itself. Rather than inflate everything and lose the density,
+   expand only where the pointer is actually coarse. */
+@media (pointer: coarse){
+  .chip{min-height:44px;padding:0 14px}
+  .seg button{min-height:44px}
+  .mode{min-height:48px}
+  .btn{min-height:48px}
+  .replay,.skip,.linkbtn{min-height:44px;padding-left:12px;padding-right:12px}
+  .pill{min-height:44px}
+  .thumbs button{min-height:56px}
+  footer a{display:inline-block;padding:13px 6px}
+  /* The gradient becomes a 4px band centred inside a 44px grab area, so the
+     control still looks thin but can actually be hit. */
+  input[type=range]{
+    height:44px;background-size:100% 4px;background-position:center;
+    background-repeat:no-repeat;
+  }
+}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+    scroll-behavior:auto !important;
+  }
+  /* An animation-free spinner would sit as a static ring with no sign of life,
+     so give it a border the eye reads as "working" rather than "stuck". */
+  .spinner{border-top-color:var(--amber);border-right-color:var(--amber)}
+}
 
 
 /* ============ dock: the car stays with you ============ */

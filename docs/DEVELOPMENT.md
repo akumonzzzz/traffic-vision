@@ -138,6 +138,42 @@ This is the single change that makes the demo look like a product — and it
 touches the front end, the API, and `video.py`, so it is a good way to learn the
 whole stack.
 
+### Accessibility, and why the palette is what it is
+
+The colour tokens are not aesthetic guesses; they were measured against WCAG 2.1
+AA and three pairs failed:
+
+| Pair | Was | Needed | Now |
+|---|--:|--:|--:|
+| `--dim` on `--panel` (hint text) | 2.52:1 | 4.5 | 5.01 |
+| `--dim` on `--bg` (footer) | 2.72:1 | 4.5 | 5.41 |
+| `--line-2` on `--panel` (control borders) | 1.47:1 | 3.0 | 3.08 |
+
+The naive fix — lighten `--dim` until it passes — would have pushed it onto
+`--muted` and collapsed the three-tier text hierarchy into two. The whole scale
+moved up instead: `--muted` took a lighter value and `--dim` inherited the old
+`--muted`, so the tiers stay distinct *and* all three clear 4.5:1.
+
+`--line-2` needs only 3:1 rather than 4.5:1 because it is a non-text UI boundary
+(WCAG 1.4.11). It qualifies because it draws slider tracks, ghost buttons and the
+drop zone — things whose edge *is* the affordance — not because it is a border.
+
+If you change a colour, re-check it. The ratio is
+`(L_lighter + 0.05) / (L_darker + 0.05)` on relative luminance.
+
+### Touch targets
+
+The layout is deliberately dense, which is right with a mouse and wrong with a
+thumb. Measured on a 390px viewport, 23 controls were under the 44px minimum —
+class chips at 29px, "Clear all" at 13px, and sliders whose entire hit area was
+the 4px visual track.
+
+Rather than inflate everything and lose the density, `@media (pointer: coarse)`
+expands them only where the pointer actually is coarse. Sliders keep their thin
+look by centring the 4px gradient inside a 44px grab area via `background-size`.
+
+If you add a control, check it at 390px before shipping.
+
 ### The look of the page
 
 Everything is in `app/static/index.html` — styles at the top, logic at the
