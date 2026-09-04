@@ -10,6 +10,7 @@ weights/ and set MODEL_PATH to serve it -- no other code changes needed.
 from __future__ import annotations
 
 import argparse
+import pathlib
 import shutil
 from pathlib import Path
 
@@ -32,8 +33,16 @@ def main() -> int:
                         help="Early-stop after N epochs without improvement")
     args = parser.parse_args()
 
-    if not args.data.exists():
-        raise SystemExit(f"Dataset config not found: {args.data}")
+    # A bare name like "coco128.yaml" is an Ultralytics built-in that it resolves
+    # and downloads itself, so only a value that looks like a local path gets an
+    # existence check. Rejecting the built-in name blocks the obvious smoke test
+    # -- and evaluate.py already accepts it, so the two scripts disagreed.
+    looks_local = args.data.parent != pathlib.Path(".") or args.data.exists()
+    if looks_local and not args.data.exists():
+        raise SystemExit(
+            f"Dataset config not found: {args.data}. "
+            f"For a public smoke test try: --data coco128.yaml"
+        )
 
     from ultralytics import YOLO
 

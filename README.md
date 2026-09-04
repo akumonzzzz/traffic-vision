@@ -130,7 +130,10 @@ real road data is the remaining lever, and the only one that would make these
 numbers describe traffic rather than COCO.
 
 Replacing these numbers with ones from real traffic footage is the single highest-value
-change to this repo. See [docs/DATASET.md](docs/DATASET.md).
+change to this repo. [`notebooks/finetune_colab.ipynb`](notebooks/finetune_colab.ipynb)
+is a runnable Colab notebook for exactly that — dataset options, training settings
+with the reasoning behind each, and a before/after comparison against the stock
+weights. See also [docs/DATASET.md](docs/DATASET.md) for the layout rules.
 
 ---
 
